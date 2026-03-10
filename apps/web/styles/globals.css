@@ -1,0 +1,12 @@
+/* LonghorNet frontend global styles scaffold */
+:root {
+  --color-bg: #ffffff;
+  --color-text: #111827;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: sans-serif;
+}
