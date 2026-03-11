@@ -123,7 +123,7 @@ export function extractConfigFields(inputSchema: unknown): {
       continue;
     }
 
-    if (["text", "textarea", "select", "boolean", "checkbox", "url", "email"].includes(field.type)) {
+    if (["text", "textarea", "select", "boolean", "checkbox", "url", "email", "password"].includes(field.type)) {
       supportedFields.push(field);
       continue;
     }
@@ -149,6 +149,11 @@ export function getEditableConfigValues(config: ConfigEnvelope): Record<string, 
 
     if (typeof rawValue === "boolean") {
       values[field.key] = rawValue;
+      return values;
+    }
+
+    if (field.type === "password") {
+      values[field.key] = "";
       return values;
     }
 

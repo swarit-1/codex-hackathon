@@ -5,6 +5,7 @@ import { paginateItems } from "./lib/pagination";
 import { toPendingActionRecord, toAgentRecord } from "./lib/records";
 import {
   pendingActionCreateArgs,
+  pendingActionListByAgentArgs,
   pendingActionListArgs,
   pendingActionResolveArgs,
 } from "./lib/validators";
@@ -123,6 +124,36 @@ export const listByUser = query({
       "pendingActions",
       "by_userId",
       [["userId", args.userId]]
+    );
+
+    const actions = docs
+      .map((action) => toPendingActionRecord(action as any))
+      .sort((left, right) => right.createdAt - left.createdAt);
+
+    return paginateItems(actions, args);
+  },
+});
+
+export const listByAgent = query({
+  args: pendingActionListByAgentArgs,
+  handler: async (ctx, args) => {
+    const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
+
+    if (!agentDoc) {
+      throw notFoundError("agent not found", {
+        agentId: args.agentId,
+      });
+    }
+
+    const agent = toAgentRecord(agentDoc as any);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId, args.sessionToken);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
+
+    const docs = await queryByIndex<Omit<PendingActionRecord, "id">>(
+      ctx,
+      "pendingActions",
+      "by_agentId",
+      [["agentId", args.agentId]]
     );
 
     const actions = docs

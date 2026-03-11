@@ -1,19 +1,30 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell, MarketplaceHero, MarketplaceTile, SectionHeading } from "../shared";
-import { useMarketplaceCategories, useMarketplaceInstall, useMarketplaceTemplates } from "../../lib/hooks";
-import { getEditableConfigValues } from "../../lib/utils";
-import type { MarketplaceTemplate } from "../../lib/contracts/types";
+import { useMemo, useState } from "react";
+import { AppShell, MarketplaceCard, MarketplaceHero, SectionHeading } from "../shared";
+import {
+  useConvexEnabled,
+  useInstalledAgents,
+  useMarketplaceCategories,
+  useMarketplaceInstall,
+  useMarketplaceTemplates,
+  useRequireCurrentUser,
+} from "../../lib/hooks";
+import { getErrorMessage } from "../../lib/utils";
 
 export function MarketplaceView({ currentPath }: { currentPath: string }) {
   const router = useRouter();
+  const convexEnabled = useConvexEnabled();
+  const { isReady, isLoading: isUserLoading, needsOnboarding } = useRequireCurrentUser();
   const { templates, isLoading } = useMarketplaceTemplates();
-  const categories = useMarketplaceCategories();
+  const { agents } = useInstalledAgents();
   const installTemplate = useMarketplaceInstall();
+  const categories = useMarketplaceCategories();
 
   const [activeCategory, setActiveCategory] = useState("all");
+  const [installingTemplateId, setInstallingTemplateId] = useState<string | null>(null);
+  const [installErrorByTemplate, setInstallErrorByTemplate] = useState<Record<string, string | null>>({});
 
   const filteredTemplates = useMemo(
     () =>
@@ -28,13 +39,50 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
   const featuredTemplates = filteredTemplates.filter((template) => template.source === "dev").slice(0, 3);
   const communityTemplates = filteredTemplates.filter((template) => template.source === "student");
   const catalogTemplates = [...featuredTemplates, ...communityTemplates];
+  const installedTemplateIds = useMemo(
+    () => new Set(agents.map((agent) => agent.templateId).filter(Boolean)),
+    [agents]
+  );
 
-  const handleInstall = async (template: MarketplaceTemplate) => {
-    const defaultValues = getEditableConfigValues(template.templateConfig);
-    await installTemplate(template, defaultValues);
-    router.push("/my-agents");
+  if (convexEnabled && !isReady) {
+    return (
+      <AppShell currentPath={currentPath}>
+        <section className="page-section">
+          <p className="empty-state">
+            {isUserLoading || needsOnboarding ? "Loading account..." : "Preparing marketplace..."}
+          </p>
+        </section>
+      </AppShell>
+    );
+  }
+
+  const handleInstall = async (
+    template: (typeof templates)[number],
+    currentValues: Record<string, string | boolean>
+  ) => {
+    setInstallingTemplateId(template.id);
+    setInstallErrorByTemplate((current) => ({
+      ...current,
+      [template.id]: null,
+    }));
+
+    try {
+      const result = await installTemplate(template, currentValues);
+
+      if (!result) {
+        throw new Error("Install is unavailable until you are signed in.");
+      }
+
+      router.push("/my-agents");
+    } catch (error) {
+      setInstallErrorByTemplate((current) => ({
+        ...current,
+        [template.id]: getErrorMessage(error, "Template install failed."),
+      }));
+    } finally {
+      setInstallingTemplateId(null);
+    }
   };
-
 
   return (
     <AppShell currentPath={currentPath}>
@@ -92,8 +140,21 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
             ) : featuredTemplates.length > 0 ? (
               <div className="store-grid featured">
                 {featuredTemplates.map((template) => (
-                  <MarketplaceTile key={`featured-${template.id}`} template={template} onInstall={handleInstall} />
-
+                  <MarketplaceCard
+                    key={`featured-${template.id}`}
+                    template={template}
+                    installControls={
+                      convexEnabled
+                        ? {
+                            enabled: true,
+                            isInstalling: installingTemplateId === template.id,
+                            isInstalled: installedTemplateIds.has(template.id),
+                            error: installErrorByTemplate[template.id] ?? null,
+                            onInstall: handleInstall,
+                          }
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
             ) : (
@@ -112,8 +173,21 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
             ) : catalogTemplates.length > 0 ? (
               <div className="store-grid catalog">
                 {catalogTemplates.map((template) => (
-                  <MarketplaceTile key={template.id} template={template} onInstall={handleInstall} />
-
+                  <MarketplaceCard
+                    key={template.id}
+                    template={template}
+                    installControls={
+                      convexEnabled
+                        ? {
+                            enabled: true,
+                            isInstalling: installingTemplateId === template.id,
+                            isInstalled: installedTemplateIds.has(template.id),
+                            error: installErrorByTemplate[template.id] ?? null,
+                            onInstall: handleInstall,
+                          }
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
             ) : (

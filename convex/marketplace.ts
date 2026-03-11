@@ -14,6 +14,10 @@ import {
   mergeInstalledConfig,
   resolveInstalledSchedule,
 } from "./lib/marketplace";
+import {
+  prepareAgentConfigForStorage,
+  syncRegistrationMonitorsForConfig,
+} from "./lib/agentConfig";
 import { paginateItems } from "./lib/pagination";
 import {
   toAgentRecord,
@@ -157,7 +161,9 @@ export const installTemplate = mutation({
     }
 
     const timestamp = Date.now();
-    const config = mergeInstalledConfig(template.templateConfig, args.config);
+    const config = await prepareAgentConfigForStorage(
+      mergeInstalledConfig(template.templateConfig, args.config)
+    );
     const schedule = assertValidScheduleConfig(
       resolveInstalledSchedule(config, template.templateConfig.defaultSchedule)
     );
@@ -178,6 +184,15 @@ export const installTemplate = mutation({
       createdAt: timestamp,
       updatedAt: timestamp,
     });
+
+    if (template.templateType === "reg") {
+      await syncRegistrationMonitorsForConfig(ctx, {
+        userId: args.userId,
+        agentId,
+        config,
+        timestamp,
+      });
+    }
 
     await patchDoc(ctx, args.templateId, {
       installCount: template.installCount + 1,

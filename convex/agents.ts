@@ -7,7 +7,7 @@ import {
   patchDoc,
   queryByIndex,
 } from "./lib/db";
-import { invalidStateError, notFoundError, rateLimitError } from "./lib/errors";
+import { notFoundError, rateLimitError } from "./lib/errors";
 import { getAgentOrThrow, deleteByAgentId } from "./lib/agentUtils";
 import { appendAgentLog } from "./lib/logging";
 import {
@@ -15,6 +15,10 @@ import {
   mergeInstalledConfig,
   resolveInstalledSchedule,
 } from "./lib/marketplace";
+import {
+  prepareAgentConfigForStorage,
+  syncRegistrationMonitorsForConfig,
+} from "./lib/agentConfig";
 import { paginateItems } from "./lib/pagination";
 import { toAgentRecord, toMarketplaceTemplateRecord } from "./lib/records";
 import {
@@ -23,11 +27,13 @@ import {
   buildAgentOperationEvent,
   buildRuntimeHandoffPayload,
 } from "./lib/runControl";
+import { createAgentRun } from "./lib/agentRuns";
 import {
   agentCreateArgs,
   agentDeleteArgs,
   agentListFilterArgs,
   agentRunNowArgs,
+  agentUpdateConfigArgs,
   agentUpdateScheduleArgs,
   agentUpdateStatusArgs,
 } from "./lib/validators";
@@ -54,7 +60,7 @@ export const create = mutation({
     const timestamp = Date.now();
     let ownerType = args.ownerType ?? "generated";
     let type = args.type;
-    let config = args.config;
+    let config = await prepareAgentConfigForStorage(args.config);
     let schedule = args.schedule ?? resolveInstalledSchedule(args.config);
 
     if (args.templateId) {
@@ -71,7 +77,9 @@ export const create = mutation({
 
       ownerType = args.ownerType ?? deriveAgentOwnerType(template.source);
       type = template.templateType;
-      config = mergeInstalledConfig(template.templateConfig, args.config);
+      config = await prepareAgentConfigForStorage(
+        mergeInstalledConfig(template.templateConfig, args.config)
+      );
       schedule = args.schedule ?? resolveInstalledSchedule(config, template.templateConfig.defaultSchedule);
     }
 
@@ -93,6 +101,15 @@ export const create = mutation({
       createdAt: timestamp,
       updatedAt: timestamp,
     });
+
+    if (type === "reg") {
+      await syncRegistrationMonitorsForConfig(ctx, {
+        userId: args.userId,
+        agentId,
+        config,
+        timestamp,
+      });
+    }
 
     await appendAgentLog(ctx, {
       agentId,
@@ -145,6 +162,60 @@ export const updateStatus = mutation({
     return {
       ...agent,
       status: args.status,
+      updatedAt: timestamp,
+    };
+  },
+});
+
+export const updateConfig = mutation({
+  args: agentUpdateConfigArgs,
+  handler: async (ctx, args): Promise<AgentRecord> => {
+    const agent = await getAgentOrThrow(ctx, args.agentId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId, args.sessionToken);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
+
+    let nextConfig = args.config;
+
+    if (agent.templateId) {
+      const templateDoc = await getDoc<Omit<MarketplaceTemplateRecord, "id">>(ctx, agent.templateId);
+
+      if (templateDoc) {
+        nextConfig = mergeInstalledConfig(
+          toMarketplaceTemplateRecord(templateDoc as any).templateConfig,
+          args.config
+        );
+      }
+    }
+
+    nextConfig = await prepareAgentConfigForStorage(nextConfig, agent.config);
+
+    const timestamp = Date.now();
+    await patchDoc(ctx, args.agentId, {
+      config: nextConfig,
+      updatedAt: timestamp,
+    });
+
+    if (agent.type === "reg") {
+      await syncRegistrationMonitorsForConfig(ctx, {
+        userId: agent.userId,
+        agentId: agent.id,
+        config: nextConfig,
+        timestamp,
+      });
+    }
+
+    await appendAgentLog(ctx, {
+      agentId: args.agentId,
+      event: "agent.config.updated",
+      details: {
+        title: "Agent details updated",
+        detail: "Configuration changes were saved and will be used for future runs.",
+      },
+    });
+
+    return {
+      ...agent,
+      config: nextConfig,
       updatedAt: timestamp,
     };
   },
@@ -232,8 +303,18 @@ export const runNow = mutation({
       requestedByUserId: actingUserId ?? agent.userId,
       schedule: agent.schedule,
     });
+    let run: Awaited<ReturnType<typeof createAgentRun>> | undefined;
 
     if (!alreadyRunning) {
+      run = await createAgentRun(ctx, {
+        userId: agent.userId,
+        agentId: agent.id,
+        triggerType: "manual",
+        status: "queued",
+        phase: "queued",
+        summary: "Run requested and queued for launch.",
+      });
+
       await patchDoc(ctx, args.agentId, {
         status: "active",
         lastRunStatus: "running",
@@ -244,13 +325,17 @@ export const runNow = mutation({
 
     await appendAgentLog(ctx, {
       agentId: args.agentId,
+      runId: run?.id,
       event: "agent.run_now.requested",
+      phase: "queued",
       details: operationEvent,
     });
 
     await appendAgentLog(ctx, {
       agentId: args.agentId,
+      runId: run?.id,
       event: "agent.runtime.handoff_prepared",
+      phase: "queued",
       details: handoffPayload,
     });
 
@@ -258,6 +343,7 @@ export const runNow = mutation({
     if (!alreadyRunning) {
       await ctx.scheduler.runAfter(0, internal.runtime.launchBrowserTask, {
         agentId: agent.id,
+        runId: run!.id,
         agentType: agent.type,
         config: agent.config,
       });
@@ -363,7 +449,9 @@ export const deleteAgent = mutation({
 
     await Promise.all([
       deleteByAgentId(ctx, "agentLogs", args.agentId),
+      deleteByAgentId(ctx, "agentRuns", args.agentId),
       deleteByAgentId(ctx, "scholarships", args.agentId),
+      deleteByAgentId(ctx, "labOpenings", args.agentId),
       deleteByAgentId(ctx, "registrationMonitors", args.agentId),
       deleteByAgentId(ctx, "pendingActions", args.agentId),
       deleteByAgentId(ctx, "customWorkflows", args.agentId),

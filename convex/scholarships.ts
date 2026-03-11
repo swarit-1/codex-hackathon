@@ -4,6 +4,7 @@ import { notFoundError } from "./lib/errors";
 import { paginateItems } from "./lib/pagination";
 import { toScholarshipRecord, toAgentRecord } from "./lib/records";
 import {
+  scholarshipListByAgentArgs,
   scholarshipListArgs,
   scholarshipUpsertFromRunArgs,
 } from "./lib/validators";
@@ -33,6 +34,36 @@ export const listByUser = query({
       .sort((left, right) => right.updatedAt - left.updatedAt);
 
     return paginateItems(filtered, args);
+  },
+});
+
+export const listByAgent = query({
+  args: scholarshipListByAgentArgs,
+  handler: async (ctx, args) => {
+    const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
+
+    if (!agentDoc) {
+      throw notFoundError("agent not found", {
+        agentId: args.agentId,
+      });
+    }
+
+    const agent = toAgentRecord(agentDoc as any);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId, args.sessionToken);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
+
+    const scholarships = await queryByIndex<Omit<ScholarshipRecord, "id">>(
+      ctx,
+      "scholarships",
+      "by_agentId",
+      [["agentId", args.agentId]]
+    );
+
+    const sorted = scholarships
+      .map((scholarship) => toScholarshipRecord(scholarship as any))
+      .sort((left, right) => right.updatedAt - left.updatedAt);
+
+    return paginateItems(sorted, args);
   },
 });
 
