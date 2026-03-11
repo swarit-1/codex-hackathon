@@ -35,6 +35,11 @@ export type ScenarioId =
   | "my_agents_run_now"
   | "my_agents_schedule_update";
 
+// Dev3 legacy run types (kept for backward compatibility with runtime store)
+export type RunType = "install" | "manual" | "schedule" | "resume" | "webhook";
+export type AgentRunState = "idle" | "running" | "paused" | "completed" | "failed" | "cancelled";
+export type AgentControlAction = "run_now" | "update_schedule" | "delete" | "cancel_run";
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 
@@ -335,4 +340,26 @@ export interface AgentLogRecord {
   details: JsonValue;
   screenshots?: string[];
   scenarioId?: ScenarioId;
+}
+
+// Dev3 legacy interface (kept for backward compatibility with runtime store)
+export interface RuntimeRunContext {
+  agentId: string;
+  runId: string;
+  templateId?: string;
+  scenarioId: string;
+  status: AgentStatus;
+  timestamp: string;
+  details: Record<string, unknown>;
+}
+
+// Dev3 legacy interface (kept for backward compatibility with runtime store)
+export interface ScheduledTaskRecord {
+  id: string;
+  agentId: string;
+  schedule: string;
+  nextRunAt: string;
+  state: "scheduled" | "cancelled";
+  createdAt: string;
+  cancelledAt?: string;
 }
