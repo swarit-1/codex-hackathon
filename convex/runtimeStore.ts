@@ -1,6 +1,7 @@
 import type {
   AgentLogRecord,
   AgentRecord,
+  IntramuralSignupRecord,
   LabOpeningRecord,
   MarketplaceTemplateRecord,
   PendingActionRecord,
@@ -17,6 +18,7 @@ interface RuntimeStore {
   scholarships: Map<string, ScholarshipRecord>;
   labOpenings: Map<string, LabOpeningRecord>;
   registrationMonitors: Map<string, RegistrationMonitorRecord>;
+  intramuralSignups: Map<string, IntramuralSignupRecord>;
   pendingActions: Map<string, PendingActionRecord>;
   agentLogs: Map<string, AgentLogRecord>;
   scheduledTasks: Map<string, ScheduledTaskRecord>;
@@ -27,6 +29,7 @@ export const DEFAULT_USER_ID = "user_demo";
 export const SCHOLARBOT_TEMPLATE_ID = "tpl_dev_scholarbot";
 export const REGBOT_TEMPLATE_ID = "tpl_dev_regbot";
 export const EUREKABOT_TEMPLATE_ID = "tpl_dev_eurekabot";
+export const IMBOT_TEMPLATE_ID = "tpl_dev_imbot";
 export const STUDENT_TEMPLATE_ID = "tpl_student_custom";
 
 const store: RuntimeStore = {
@@ -36,6 +39,7 @@ const store: RuntimeStore = {
   scholarships: new Map(),
   labOpenings: new Map(),
   registrationMonitors: new Map(),
+  intramuralSignups: new Map(),
   pendingActions: new Map(),
   agentLogs: new Map(),
   scheduledTasks: new Map(),
@@ -201,6 +205,47 @@ function seedTemplates(): void {
       updatedAt: ts,
     },
     {
+      id: IMBOT_TEMPLATE_ID,
+      title: "IMBot",
+      description: "First-party intramural sports tracker and registration automation via IMLeagues.",
+      source: "dev",
+      visibility: "public",
+      category: "intramurals",
+      installCount: 0,
+      templateConfig: {
+        schemaVersion: "v1",
+        inputSchema: {
+          fields: [
+            { key: "sports", label: "Sports", type: "multiselect" },
+            { key: "division", label: "Division", type: "text" },
+            { key: "role", label: "Role", type: "text" },
+          ],
+        },
+        defaultConfig: {
+          sports: ["Basketball", "Flag Football", "Soccer"],
+          division: "C",
+          role: "free_agent",
+          preferredDays: ["Sunday", "Tuesday", "Thursday"],
+          preferredTime: "evening",
+        },
+        currentConfig: {
+          sports: ["Basketball", "Flag Football", "Soccer"],
+          division: "C",
+          role: "free_agent",
+          preferredDays: ["Sunday", "Tuesday", "Thursday"],
+          preferredTime: "evening",
+        },
+        defaultSchedule: {
+          enabled: true,
+          cron: "0 8 * * 1",
+          timezone: "America/Chicago",
+        },
+      },
+      templateType: "im",
+      createdAt: ts,
+      updatedAt: ts,
+    },
+    {
       id: STUDENT_TEMPLATE_ID,
       title: "Student Workflow Example",
       description: "Student submitted template used to validate source restrictions.",
@@ -243,6 +288,7 @@ export function resetRuntimeStore(): void {
   store.scholarships.clear();
   store.labOpenings.clear();
   store.registrationMonitors.clear();
+  store.intramuralSignups.clear();
   store.pendingActions.clear();
   store.agentLogs.clear();
   store.scheduledTasks.clear();

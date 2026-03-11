@@ -25,6 +25,8 @@ export const SCENARIO_IDS: ScenarioId[] = [
   "submission_pending_to_approved",
   "my_agents_run_now",
   "my_agents_schedule_update",
+  "eurekabot_happy_path",
+  "imbot_happy_path",
 ];
 
 function buildDefaultSchedule(overrides: Partial<ScheduleConfig> = {}): ScheduleConfig {
@@ -229,6 +231,16 @@ export function buildBackendScenarioFixtures(): Record<ScenarioId, BackendScenar
       "my_agents_schedule_update",
       "My Agents schedule update",
       "scheduled"
+    ),
+    eurekabot_happy_path: buildRunFixture(
+      "eurekabot_happy_path",
+      "EurekaBot happy path",
+      "manual"
+    ),
+    imbot_happy_path: buildRunFixture(
+      "imbot_happy_path",
+      "IMBot happy path",
+      "manual"
     ),
   };
 }

@@ -8,6 +8,7 @@ import type {
   AgentRecord,
   AgentLogRecord,
   LabOpeningRecord,
+  IntramuralSignupRecord,
   PendingActionRecord,
   ScholarshipRecord,
   RegistrationMonitorRecord,
@@ -159,6 +160,16 @@ export function listLabOpeningsByAgent(agentId: string): LabOpeningRecord[] {
   return results;
 }
 
+// ── Intramural Signups ────────────────────────────────────────────────────────
+
+export function listIntramuralSignupsByAgent(agentId: string): IntramuralSignupRecord[] {
+  const results: IntramuralSignupRecord[] = [];
+  for (const s of getRuntimeStore().intramuralSignups.values()) {
+    if (s.agentId === agentId) results.push(s);
+  }
+  return results;
+}
+
 export function upsertLabOpeningFromRun(entry: {
   userId: string;
   agentId: string;
@@ -208,6 +219,53 @@ export function upsertLabOpeningFromRun(entry: {
   getRuntimeStore().labOpenings.set(id, record);
   return record;
 }
+
+export function upsertIntramuralSignup(entry: {
+  userId: string;
+  agentId: string;
+  sport: string;
+  division: string;
+  role: IntramuralSignupRecord["role"];
+  teamName?: string;
+  preferredDay?: string;
+  preferredTime?: string;
+  registrationFee?: number;
+  status: IntramuralSignupRecord["status"];
+}): IntramuralSignupRecord {
+  for (const s of getRuntimeStore().intramuralSignups.values()) {
+    if (s.agentId === entry.agentId && s.sport === entry.sport && s.division === entry.division) {
+      Object.assign(s, entry, { updatedAt: Date.now() });
+      return s;
+    }
+  }
+  const id = nextId("ims");
+  const now = Date.now();
+  const record: IntramuralSignupRecord = {
+    id,
+    userId: entry.userId,
+    agentId: entry.agentId,
+    sport: entry.sport,
+    division: entry.division,
+    role: entry.role,
+    teamName: entry.teamName,
+    preferredDay: entry.preferredDay,
+    preferredTime: entry.preferredTime,
+    registrationFee: entry.registrationFee,
+    status: entry.status,
+    createdAt: now,
+    updatedAt: now,
+  };
+  getRuntimeStore().intramuralSignups.set(id, record);
+  return record;
+}
+
+export function updateIntramuralSignupStatus(id: string, status: IntramuralSignupRecord["status"]): void {
+  const signup = getRuntimeStore().intramuralSignups.get(id);
+  if (!signup) return;
+  signup.status = status;
+  signup.updatedAt = Date.now();
+}
+
 
 // ── Agent Logs ───────────────────────────────────────────────────────────────
 

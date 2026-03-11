@@ -78,6 +78,31 @@ const demoTemplates: DemoTemplateSeed[] = [
     approvedAt: NOW - 1000 * 60 * 60 * 24 * 55,
   },
   {
+    title: "IMBot",
+    description:
+      "Scans UT RecSports IMLeagues for open intramural registration, matches your sport and schedule preferences, and signs you up before spots fill.",
+    source: "dev",
+    category: "Intramurals",
+    visibility: "public",
+    templateType: "im",
+    installCount: 312,
+    cadenceLabel: "Hourly during registration windows",
+    setupFields: [
+      "Preferred sports",
+      "Skill level (A/B/C)",
+      "Preferred days & times",
+      "Role (captain or free agent)",
+    ],
+    outcomes: ["Sport matching", "Slot availability check", "Registration confirmation"],
+    defaultSchedule: {
+      enabled: true,
+      cron: "0 * * * *",
+      timezone: "America/Chicago",
+      jitterMinutes: 5,
+    },
+    approvedAt: NOW - 1000 * 60 * 60 * 24 * 30,
+  },
+  {
     title: "Financial Aid Audit",
     description:
       "Tracks aid portal changes, missing documents, and deadline movement for students managing multiple aid workflows.",
@@ -146,6 +171,80 @@ const semesterOptions = [
 ];
 
 function buildInputSchema(seed: DemoTemplateSeed) {
+  if (seed.title === "IMBot") {
+    return {
+      fields: [
+        {
+          key: "sports",
+          label: "Preferred sports",
+          type: "multiselect",
+          required: true,
+          options: [
+            { label: "Basketball", value: "Basketball" },
+            { label: "Flag Football", value: "Flag Football" },
+            { label: "Soccer", value: "Soccer" },
+            { label: "Dodgeball", value: "Dodgeball" },
+            { label: "Sand Volleyball", value: "Sand Volleyball" },
+            { label: "Softball", value: "Softball" },
+            { label: "Ultimate", value: "Ultimate" },
+            { label: "Indoor Volleyball", value: "Indoor Volleyball" },
+          ],
+        },
+        {
+          key: "division",
+          label: "Skill level",
+          type: "select",
+          required: true,
+          options: [
+            { label: "A — Competitive", value: "A" },
+            { label: "B — Intermediate", value: "B" },
+            { label: "C — Recreational", value: "C" },
+          ],
+        },
+        {
+          key: "preferredDays",
+          label: "Preferred days",
+          type: "multiselect",
+          required: true,
+          options: [
+            { label: "Sunday", value: "Sunday" },
+            { label: "Monday", value: "Monday" },
+            { label: "Tuesday", value: "Tuesday" },
+            { label: "Wednesday", value: "Wednesday" },
+            { label: "Thursday", value: "Thursday" },
+            { label: "Friday", value: "Friday" },
+          ],
+        },
+        {
+          key: "preferredTime",
+          label: "Preferred time",
+          type: "select",
+          required: true,
+          options: [
+            { label: "Afternoon (12–5 PM)", value: "afternoon" },
+            { label: "Evening (5–10 PM)", value: "evening" },
+          ],
+        },
+        {
+          key: "role",
+          label: "Role",
+          type: "select",
+          required: true,
+          options: [
+            { label: "Free Agent — join an existing team", value: "free_agent" },
+            { label: "Captain — create your own team", value: "captain" },
+          ],
+        },
+        {
+          key: "teamName",
+          label: "Team name (captains only)",
+          type: "text",
+          required: false,
+        },
+      ],
+    } as ConfigEnvelope["inputSchema"];
+  }
+
   if (seed.title === "RegBot") {
     return {
       fields: [
@@ -208,6 +307,16 @@ function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
             conflictPolicy: "",
           }
         : {}),
+      ...(seed.title === "IMBot"
+        ? {
+            sports: ["Basketball", "Flag Football", "Soccer"],
+            division: "C",
+            preferredDays: ["Sunday", "Tuesday", "Thursday"],
+            preferredTime: "evening",
+            role: "free_agent",
+            teamName: "",
+          }
+        : {}),
     },
     defaultSchedule: seed.defaultSchedule,
     currentConfig: {
@@ -220,6 +329,16 @@ function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
             uniqueId: "",
             semester: "Fall 2026",
             conflictPolicy: "",
+          }
+        : {}),
+      ...(seed.title === "IMBot"
+        ? {
+            sports: ["Basketball", "Flag Football", "Soccer"],
+            division: "C",
+            preferredDays: ["Sunday", "Tuesday", "Thursday"],
+            preferredTime: "evening",
+            role: "free_agent",
+            teamName: "",
           }
         : {}),
     },
@@ -373,6 +492,13 @@ async function ensureAgents(
       lastRunStatus: "succeeded" as const,
       lastRunAt: NOW - 1000 * 60 * 60 * 26,
       nextRunAt: NOW + 1000 * 60 * 60 * 31,
+    },
+    {
+      templateTitle: "IMBot",
+      status: "active" as const,
+      lastRunStatus: "succeeded" as const,
+      lastRunAt: NOW - 1000 * 60 * 45,
+      nextRunAt: NOW + 1000 * 60 * 15,
     },
     {
       templateTitle: "Financial Aid Audit",
