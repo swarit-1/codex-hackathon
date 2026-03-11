@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { patchDoc, queryByIndex } from "./lib/db";
 import { appendAgentLog } from "./lib/logging";
 import { toAgentRecord } from "./lib/records";
@@ -56,6 +57,13 @@ export const checkScheduledAgents = internalMutation({
           triggeredAt: now,
           nextRunAt,
         },
+      });
+
+      // Launch the actual Browser Use task
+      await ctx.scheduler.runAfter(0, internal.runtime.launchBrowserTask, {
+        agentId: agent.id,
+        agentType: agent.type,
+        config: agent.config,
       });
 
       triggeredCount++;

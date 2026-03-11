@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import {
   deleteDoc,
   getDoc,
@@ -252,6 +253,15 @@ export const runNow = mutation({
       event: "agent.runtime.handoff_prepared",
       details: handoffPayload,
     });
+
+    // Schedule the actual Browser Use runtime execution
+    if (!alreadyRunning) {
+      await ctx.scheduler.runAfter(0, internal.runtime.launchBrowserTask, {
+        agentId: agent.id,
+        agentType: agent.type,
+        config: agent.config,
+      });
+    }
 
     return {
       agent: {
