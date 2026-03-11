@@ -48,6 +48,13 @@ export function notFoundError(
   return createBackendError("NOT_FOUND", message, metadata);
 }
 
+export function rateLimitError(
+  message: string,
+  metadata?: JsonObject
+): BackendContractError {
+  return createBackendError("RATE_LIMITED", message, metadata);
+}
+
 export function phaseNotImplementedError(
   functionName: string,
   phase: number

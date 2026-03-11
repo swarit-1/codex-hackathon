@@ -1,7 +1,5 @@
 {
-  "/page": "app/page.js",
-  "/marketplace/page": "app/marketplace/page.js",
-  "/studio/page": "app/studio/page.js",
-  "/settings/page": "app/settings/page.js",
-  "/my-agents/page": "app/my-agents/page.js"
+  "/my-agents/page": "app/my-agents/page.js",
+  "/onboarding/page": "app/onboarding/page.js",
+  "/marketplace/page": "app/marketplace/page.js"
 }

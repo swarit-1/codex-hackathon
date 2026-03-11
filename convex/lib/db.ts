@@ -66,3 +66,37 @@ export async function queryByIndex<T extends Record<string, unknown>>(
   const docs = await queryAll<T>(ctx, table);
   return docs.filter((doc) => constraints.every(([field, value]) => doc[field] === value));
 }
+
+/**
+ * Like queryByIndex but returns at most `limit` results ordered by the index descending.
+ * Used for bounded dedup checks (e.g., webhook log scanning).
+ */
+export async function queryByIndexRecent<T extends Record<string, unknown>>(
+  ctx: ConvexCtx,
+  table: string,
+  indexName: string,
+  constraints: IndexConstraint[],
+  limit: number
+): Promise<Array<ConvexDoc<T>>> {
+  const db = getDb(ctx);
+  const baseQuery = db.query(table);
+
+  if (typeof baseQuery.withIndex === "function") {
+    const indexedQuery = baseQuery.withIndex(indexName, (builder: any) =>
+      constraints.reduce(
+        (accumulator, [field, value]) => accumulator.eq(field, value),
+        builder
+      )
+    );
+    return ((await indexedQuery.order("desc").take(limit)) ?? []) as Array<
+      ConvexDoc<T>
+    >;
+  }
+
+  // Fallback: fetch all and take last N
+  const docs = await queryAll<T>(ctx, table);
+  const filtered = docs.filter((doc) =>
+    constraints.every(([field, value]) => doc[field] === value)
+  );
+  return filtered.slice(-limit);
+}
