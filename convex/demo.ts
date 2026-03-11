@@ -3,6 +3,7 @@ import { buildAgentScriptResult, buildWorkflowSpecResult } from "./lib/flowforge
 import { insertDoc, queryAll, queryByIndex } from "./lib/db";
 import { appendAgentLog } from "./lib/logging";
 import { toAgentRecord, toMarketplaceTemplateRecord, toUserProfileRecord } from "./lib/records";
+import { demoBootstrapCatalogArgs } from "./lib/validators";
 import type {
   AgentRecord,
   ConfigEnvelope,
@@ -202,7 +203,7 @@ async function ensureDemoUser(ctx: any): Promise<UserProfileRecord> {
 
 async function ensureTemplates(
   ctx: any,
-  ownerUserId: string
+  ownerUserId?: string
 ): Promise<Record<string, MarketplaceTemplateRecord>> {
   const existingTemplates = await queryAll<Omit<MarketplaceTemplateRecord, "id">>(ctx, "marketplaceTemplates");
   const byTitle = new Map(
@@ -552,6 +553,17 @@ async function ensureAgentLogs(ctx: any, agents: Record<string, AgentRecord>): P
     timestamp: NOW - 1000 * 60 * 60 * 17,
   });
 }
+
+export const bootstrapCatalog = mutation({
+  args: demoBootstrapCatalogArgs,
+  handler: async (ctx) => {
+    const templates = await ensureTemplates(ctx);
+
+    return {
+      templateCount: Object.keys(templates).length,
+    };
+  },
+});
 
 export const bootstrapWorkspace = mutation({
   args: {},

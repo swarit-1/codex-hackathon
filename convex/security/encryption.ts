@@ -115,9 +115,9 @@ export function sanitizeProfileDataForRead(
   return sanitized;
 }
 
-export function encryptCredentialVaultInProfileData(
+export async function encryptCredentialVaultInProfileData(
   profileData?: JsonObject
-): JsonObject | undefined {
+): Promise<JsonObject | undefined> {
   if (!profileData) {
     return undefined;
   }
@@ -126,10 +126,9 @@ export function encryptCredentialVaultInProfileData(
   const credentialVault = cloned.credentialVault;
 
   if (credentialVault !== undefined) {
-    // Encryption is async but profile data is stored as-is for now.
-    // In production, call encryptJsonValue() from an action.
     delete cloned.credentialVault;
-    cloned._credentialVaultPending = true;
+    const encrypted = await encryptJsonValue(credentialVault);
+    cloned._encryptedCredentialVault = encrypted as unknown as JsonValue;
   }
 
   return cloned;

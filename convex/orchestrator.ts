@@ -1,11 +1,12 @@
-import { action } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import {
   getDoc,
   patchDoc,
-  queryByIndex,
+  queryByIndexRecent,
 } from "./lib/db";
 import { notFoundError } from "./lib/errors";
 import { appendAgentLog } from "./lib/logging";
+import { getAgentOrThrow } from "./lib/agentUtils";
 import {
   deriveLifecycleStatusFromRunStatus,
   deriveNextRunAt,
@@ -14,7 +15,7 @@ import {
   normalizeRuntimeWebhookPayload,
   assertPendingActionReadyForResume,
 } from "./lib/orchestrator";
-import { toAgentRecord, toAgentLogRecord, toPendingActionRecord } from "./lib/records";
+import { toAgentLogRecord, toPendingActionRecord } from "./lib/records";
 import {
   buildAgentOperationEvent,
   buildRuntimeHandoffPayload,
@@ -34,18 +35,6 @@ import type {
   RuntimeRunType,
   RuntimeWebhookPayload,
 } from "./types/contracts";
-
-async function getAgentOrThrow(ctx: any, agentId: string): Promise<AgentRecord> {
-  const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, agentId);
-
-  if (!agentDoc) {
-    throw notFoundError("agent not found", {
-      agentId,
-    });
-  }
-
-  return toAgentRecord(agentDoc as any);
-}
 
 function buildRunNowEvent(
   agent: AgentRecord,
@@ -81,7 +70,11 @@ function buildRunNowEvent(
   };
 }
 
-export const triggerAgentRun = action({
+// NOTE: These are mutations (not actions) because they only perform DB operations.
+// When runtime integration requires external HTTP calls, refactor to actions
+// that call internal mutations for DB writes via ctx.runMutation.
+
+export const triggerAgentRun = mutation({
   args: orchestratorTriggerAgentRunArgs,
   handler: async (ctx, args): Promise<OrchestratorTriggerRunResult> => {
     const agent = await getAgentOrThrow(ctx, args.agentId);
@@ -136,16 +129,19 @@ export const triggerAgentRun = action({
   },
 });
 
-export const handleWebhook = action({
+export const handleWebhook = mutation({
   args: orchestratorHandleWebhookArgs,
   handler: async (ctx, args): Promise<OrchestratorWebhookResult> => {
     const eventPayload = normalizeRuntimeWebhookPayload(args.eventPayload as RuntimeWebhookPayload);
     const agent = await getAgentOrThrow(ctx, eventPayload.agentId);
-    const existingLogs = await queryByIndex<Omit<AgentLogRecord, "id">>(
+
+    // Bounded dedup: only scan the 100 most recent logs instead of unbounded full scan
+    const existingLogs = await queryByIndexRecent<Omit<AgentLogRecord, "id">>(
       ctx,
       "agentLogs",
       "by_agentId_timestamp",
-      [["agentId", eventPayload.agentId]]
+      [["agentId", eventPayload.agentId]],
+      100
     );
     const duplicateIgnored = isDuplicateWebhookEvent(
       existingLogs.map((log) => toAgentLogRecord(log as any)),
@@ -207,7 +203,7 @@ export const handleWebhook = action({
   },
 });
 
-export const resumeFromPendingAction = action({
+export const resumeFromPendingAction = mutation({
   args: orchestratorResumeFromPendingActionArgs,
   handler: async (ctx, args): Promise<OrchestratorResumeResult> => {
     const pendingActionDoc = await getDoc<Omit<PendingActionRecord, "id">>(ctx, args.actionId);
