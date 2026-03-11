@@ -61,6 +61,9 @@ export function toMarketplaceTemplate(record: {
     status = "pending_review";
   }
 
+  const { iconKey, iconGlyph } = resolveTemplateIcon(record.title, record.category, record.source);
+  const imageSrc = resolveTemplateImage(record.title, iconKey);
+
   return {
     id: record.id,
     title: record.title,
@@ -78,7 +81,58 @@ export function toMarketplaceTemplate(record: {
     ownerUserId: record.ownerUserId,
     approvedAt: record.approvedAt,
     archivedAt: record.archivedAt,
+    imageSrc,
+    iconKey,
+    iconGlyph,
   };
+}
+
+function resolveTemplateImage(title: string, iconKey: string) {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  const known: Record<string, string> = {
+    regbot: "/workflows/regbot.svg",
+    scholarbot: "/workflows/scholarbot.svg",
+    "financial-aid-audit": "/workflows/financial-aid-audit.svg",
+    "lab-openings-watch": "/workflows/lab-openings-watch.svg",
+    "conference-travel-fund-tracker": "/workflows/conference-travel-fund-tracker.svg",
+    "study-abroad-bot": "/workflows/study-abroad-bot.svg",
+    "intramural-sports-bot": "/workflows/intramural-sports-bot.svg",
+  };
+
+  return known[slug] ?? `/workflows/${iconKey}.svg`;
+}
+
+function resolveTemplateIcon(title: string, category: string, source: "dev" | "student") {
+  const normalizedTitle = title.toLowerCase();
+  const normalizedCategory = category.toLowerCase();
+
+  if (normalizedTitle.includes("reg")) {
+    return { iconKey: "registration", iconGlyph: "RG" };
+  }
+
+  if (normalizedTitle.includes("scholar")) {
+    return { iconKey: "scholarship", iconGlyph: "SC" };
+  }
+
+  if (normalizedTitle.includes("lab") || normalizedCategory.includes("research")) {
+    return { iconKey: "research", iconGlyph: "LB" };
+  }
+
+  if (normalizedTitle.includes("travel") || normalizedTitle.includes("fund")) {
+    return { iconKey: "funding", iconGlyph: "TR" };
+  }
+
+  if (normalizedCategory.includes("admin")) {
+    return { iconKey: "admin", iconGlyph: "AD" };
+  }
+
+  return source === "dev"
+    ? { iconKey: "official", iconGlyph: "LH" }
+    : { iconKey: "student", iconGlyph: "ST" };
 }
 
 /**
