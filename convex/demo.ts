@@ -1,6 +1,6 @@
 import { mutation } from "./_generated/server";
 import { buildAgentScriptResult, buildWorkflowSpecResult } from "./lib/flowforge";
-import { insertDoc, queryAll, queryByIndex } from "./lib/db";
+import { insertDoc, patchDoc, queryAll, queryByIndex } from "./lib/db";
 import { appendAgentLog } from "./lib/logging";
 import { toAgentRecord, toMarketplaceTemplateRecord, toUserProfileRecord } from "./lib/records";
 import { demoBootstrapCatalogArgs } from "./lib/validators";
@@ -42,7 +42,7 @@ const demoTemplates: DemoTemplateSeed[] = [
     templateType: "reg",
     installCount: 481,
     cadenceLabel: "Every 10 minutes with retry jitter",
-    setupFields: ["EID login", "Course unique numbers", "Preferred semester", "Conflict policy"],
+    setupFields: ["EID login", "Course Unique Id", "Preferred semester", "Conflict policy"],
     outcomes: ["Seat monitoring", "Conflict confirmation", "Duo retry handling"],
     defaultSchedule: {
       enabled: true,
@@ -135,27 +135,93 @@ const demoTemplates: DemoTemplateSeed[] = [
   },
 ];
 
+const semesterOptions = [
+  "Fall 2025",
+  "Spring 2026",
+  "Summer 2026",
+  "Fall 2026",
+  "Spring 2027",
+  "Summer 2027",
+  "Fall 2027",
+];
+
+function buildInputSchema(seed: DemoTemplateSeed) {
+  if (seed.title === "RegBot") {
+    return {
+      fields: [
+        {
+          key: "eidLogin",
+          label: "EID login",
+          type: "text",
+          required: true,
+        },
+        {
+          key: "uniqueId",
+          label: "Course Unique Id",
+          type: "text",
+          required: true,
+          uiWidth: "compact",
+        },
+        {
+          key: "semester",
+          label: "Preferred semester",
+          type: "select",
+          required: true,
+          options: semesterOptions.map((option) => ({
+            label: option,
+            value: option,
+          })),
+        },
+        {
+          key: "conflictPolicy",
+          label: "Conflict policy",
+          type: "textarea",
+          required: true,
+        },
+      ],
+    } as ConfigEnvelope["inputSchema"];
+  }
+
+  return {
+    fields: seed.setupFields.map((field, index) => ({
+      key: `field_${index + 1}`,
+      label: field,
+      type: index === 0 ? "text" : "textarea",
+      required: true,
+    })),
+  } as ConfigEnvelope["inputSchema"];
+}
+
 function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
   return {
     schemaVersion: "v1",
-    inputSchema: {
-      fields: seed.setupFields.map((field, index) => ({
-        key: `field_${index + 1}`,
-        label: field,
-        type: index === 0 ? "text" : "textarea",
-        required: true,
-      })),
-    },
+    inputSchema: buildInputSchema(seed),
     defaultConfig: {
       cadenceLabel: seed.cadenceLabel,
       outcomes: seed.outcomes,
       title: seed.title,
+      ...(seed.title === "RegBot"
+        ? {
+            eidLogin: "",
+            uniqueId: "",
+            semester: "Fall 2026",
+            conflictPolicy: "",
+          }
+        : {}),
     },
     defaultSchedule: seed.defaultSchedule,
     currentConfig: {
       cadenceLabel: seed.cadenceLabel,
       outcomes: seed.outcomes,
       title: seed.title,
+      ...(seed.title === "RegBot"
+        ? {
+            eidLogin: "",
+            uniqueId: "",
+            semester: "Fall 2026",
+            conflictPolicy: "",
+          }
+        : {}),
     },
   };
 }
@@ -213,10 +279,29 @@ async function ensureTemplates(
   const templates: Record<string, MarketplaceTemplateRecord> = {};
 
   for (const seed of demoTemplates) {
+    const templateConfig = buildTemplateConfig(seed);
+
     const existing = byTitle.get(seed.title);
 
     if (existing) {
-      templates[seed.title] = existing;
+      await patchDoc(ctx, existing.id, {
+        description: seed.description,
+        category: seed.category,
+        visibility: seed.visibility,
+        templateType: seed.templateType,
+        templateConfig,
+        updatedAt: NOW - 1000 * 60 * 60,
+      });
+
+      templates[seed.title] = {
+        ...existing,
+        description: seed.description,
+        category: seed.category,
+        visibility: seed.visibility,
+        templateType: seed.templateType,
+        templateConfig,
+        updatedAt: NOW - 1000 * 60 * 60,
+      };
       continue;
     }
 
@@ -229,7 +314,7 @@ async function ensureTemplates(
       templateType: seed.templateType,
       installCount: seed.installCount,
       ownerUserId: seed.source === "student" ? ownerUserId : undefined,
-      templateConfig: buildTemplateConfig(seed),
+      templateConfig,
       createdAt: NOW - 1000 * 60 * 60 * 24 * 45,
       updatedAt: NOW - 1000 * 60 * 60,
       approvedAt: seed.approvedAt,
@@ -246,7 +331,7 @@ async function ensureTemplates(
       templateType: seed.templateType,
       installCount: seed.installCount,
       ownerUserId: seed.source === "student" ? ownerUserId : undefined,
-      templateConfig: buildTemplateConfig(seed),
+      templateConfig,
       createdAt: NOW - 1000 * 60 * 60 * 24 * 45,
       updatedAt: NOW - 1000 * 60 * 60,
       approvedAt: seed.approvedAt,

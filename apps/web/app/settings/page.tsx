@@ -8,6 +8,7 @@ import { AppShell, SectionHeading, SettingsGrid } from "../../components/shared"
 import { settingsSections } from "../../lib/contracts/mock-data";
 import type { ProfileFormValues } from "../../lib/contracts/types";
 import {
+  useAuthActions,
   useConvexEnabled,
   useCurrentUser,
   useRequireCurrentUser,
@@ -30,8 +31,9 @@ const EMPTY_PROFILE_FORM: ProfileFormValues = {
 
 export default function SettingsPage() {
   const convexEnabled = useConvexEnabled();
-  const { userId, profile, setCurrentUser } = useCurrentUser();
+  const { clearSession, profile, sessionToken, setSession, userId } = useCurrentUser();
   const { isReady, isLoading, needsOnboarding } = useRequireCurrentUser();
+  const { signOut } = useAuthActions();
   const updateProfile = useMutation(api.users.updateProfile);
   const [formValues, setFormValues] = useState<ProfileFormValues>(EMPTY_PROFILE_FORM);
   const [isSaving, setIsSaving] = useState(false);
@@ -76,12 +78,19 @@ export default function SettingsPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!sessionToken) {
+      setErrorMessage("Your session is missing. Please sign in again.");
+      return;
+    }
+
     setIsSaving(true);
     setStatusMessage(null);
     setErrorMessage(null);
 
     try {
       const updatedProfile = await updateProfile({
+        sessionToken,
         userId: userId as Id<"users">,
         name: formValues.name.trim(),
         email: formValues.email.trim(),
@@ -90,13 +99,25 @@ export default function SettingsPage() {
         profileData: profileFormValuesToProfileData(formValues),
       });
 
-      setCurrentUser(updatedProfile.id, updatedProfile);
+      setSession(sessionToken, updatedProfile);
       setStatusMessage("Profile saved.");
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "Profile could not be saved."));
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSignOut = async () => {
+    if (sessionToken) {
+      try {
+        await signOut(sessionToken);
+      } catch {
+        // Clear the local session even if the backend session is already gone.
+      }
+    }
+
+    clearSession();
   };
 
   return (
@@ -217,6 +238,9 @@ export default function SettingsPage() {
           <div className="card-actions">
             <button disabled={isSaving} type="submit">
               {isSaving ? "Saving..." : "Save settings"}
+            </button>
+            <button className="secondary" onClick={handleSignOut} type="button">
+              Sign out
             </button>
           </div>
         </form>

@@ -1,7 +1,9 @@
 import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
-import { getDoc } from "../lib/db";
+import { getDoc, queryByIndex } from "../lib/db";
 import { forbiddenError, notFoundError } from "../lib/errors";
+import { hashSessionToken } from "./passwords";
 import type {
+  AuthSessionRecord,
   AgentRecord,
   MarketplaceTemplateRecord,
   TemplateSubmissionRecord,
@@ -24,6 +26,26 @@ async function getUserDoc(ctx: ConvexCtx, userId: string): Promise<UserDoc> {
   }
 
   return user as UserDoc;
+}
+
+async function getSessionUserId(
+  ctx: ConvexCtx,
+  sessionToken: string
+): Promise<string | undefined> {
+  const tokenHash = await hashSessionToken(sessionToken);
+  const sessions = await queryByIndex<Omit<AuthSessionRecord, "id">>(
+    ctx,
+    "authSessions",
+    "by_tokenHash",
+    [["tokenHash", tokenHash]]
+  );
+  const session = sessions[0];
+
+  if (!session || session.revokedAt || session.expiresAt <= Date.now()) {
+    return undefined;
+  }
+
+  return String(session.userId);
 }
 
 async function getAuthIdentity(ctx: ConvexCtx): Promise<Record<string, unknown> | null> {
@@ -106,9 +128,19 @@ export async function requireUser(ctx: ConvexCtx, userId: string): Promise<UserD
 
 export async function resolveActingUserId(
   ctx: ConvexCtx,
-  fallbackUserId?: string
+  fallbackUserId?: string,
+  sessionToken?: string
 ): Promise<string | undefined> {
   const authIdentity = await getAuthIdentity(ctx);
+
+  if (sessionToken) {
+    const sessionUserId = await getSessionUserId(ctx, sessionToken);
+
+    if (sessionUserId) {
+      return sessionUserId;
+    }
+  }
+
   return extractUserIdFromIdentity(authIdentity) ?? fallbackUserId;
 }
 

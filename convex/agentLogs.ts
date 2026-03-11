@@ -27,7 +27,11 @@ export const append = mutation({
       });
     }
 
-    const actingUserId = await resolveActingUserId(ctx, String((agent as any).userId));
+    const actingUserId = await resolveActingUserId(
+      ctx,
+      String((agent as any).userId),
+      args.sessionToken
+    );
     await assertCanManageAgent(ctx, toAgentRecord(agent as any), actingUserId ?? String((agent as any).userId));
 
     return appendAgentLog(ctx, {
@@ -52,7 +56,11 @@ export const list = query({
       });
     }
 
-    const actingUserId = await resolveActingUserId(ctx, String((agent as any).userId));
+    const actingUserId = await resolveActingUserId(
+      ctx,
+      String((agent as any).userId),
+      args.sessionToken
+    );
     await assertCanManageAgent(ctx, toAgentRecord(agent as any), actingUserId ?? String((agent as any).userId));
 
     const logs = await queryByIndex<Omit<AgentLogRecord, "id">>(
@@ -73,7 +81,7 @@ export const list = query({
 export const listByUser = query({
   args: agentLogListByUserArgs,
   handler: async (ctx, args) => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const agentDocs = await queryByIndex<Omit<AgentRecord, "id">>(

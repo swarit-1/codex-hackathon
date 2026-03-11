@@ -34,6 +34,29 @@ export default defineSchema({
     .index("by_eid", ["eid"])
     .index("by_createdAt", ["createdAt"]),
 
+  userCredentials: defineTable({
+    userId: v.id("users"),
+    email: v.string(),
+    passwordHash: v.string(),
+    passwordSalt: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_email", ["email"]),
+
+  authSessions: defineTable({
+    userId: v.id("users"),
+    tokenHash: v.string(),
+    expiresAt: v.number(),
+    revokedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_userId", ["userId"])
+    .index("by_expiresAt", ["expiresAt"]),
+
   marketplaceTemplates: defineTable({
     title: v.string(),
     description: v.string(),

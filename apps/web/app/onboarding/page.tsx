@@ -1,12 +1,10 @@
 "use client";
 
-import { api } from "@convex/_generated/api";
-import { useMutation } from "convex/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ProfileFormValues } from "../../lib/contracts/types";
-import { useConvexEnabled, useCurrentUser } from "../../lib/hooks";
+import { useAuthActions, useConvexEnabled, useCurrentUser } from "../../lib/hooks";
 import {
   getErrorMessage,
   profileFormValuesToProfileData,
@@ -22,41 +20,58 @@ const INITIAL_FORM_VALUES: ProfileFormValues = {
   notifications: "",
 };
 
+function getNextPath() {
+  if (typeof window === "undefined") {
+    return "/marketplace";
+  }
+
+  return new URLSearchParams(window.location.search).get("next") || "/marketplace";
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const convexEnabled = useConvexEnabled();
-  const { userId, isLoading, setCurrentUser } = useCurrentUser();
-  const createProfile = useMutation(api.users.createProfile);
+  const { sessionToken, isLoading, setSession } = useCurrentUser();
+  const { signUp } = useAuthActions();
   const [formValues, setFormValues] = useState<ProfileFormValues>(INITIAL_FORM_VALUES);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const nextPath =
-    typeof window === "undefined"
-      ? "/marketplace"
-      : new URLSearchParams(window.location.search).get("next") || "/marketplace";
+  const nextPath = getNextPath();
 
   useEffect(() => {
-    if (convexEnabled && userId && !isLoading) {
+    if (convexEnabled && sessionToken && !isLoading) {
       router.replace(nextPath);
     }
-  }, [convexEnabled, isLoading, nextPath, router, userId]);
+  }, [convexEnabled, isLoading, nextPath, router, sessionToken]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
-      const profile = await createProfile({
+      const result = await signUp({
         name: formValues.name.trim(),
         email: formValues.email.trim(),
+        password,
         eid: formValues.eid.trim() || undefined,
-        authMethod: "email",
         profileData: profileFormValuesToProfileData(formValues),
       });
 
-      setCurrentUser(profile.id, profile);
+      if (!result) {
+        return;
+      }
+
+      setSession(result.sessionToken, result.user);
       router.replace(nextPath);
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "Account creation failed."));
@@ -71,7 +86,7 @@ export default function OnboardingPage() {
         <section className="standalone-panel">
           <h1>Convex is not configured</h1>
           <p className="lede">
-            Onboarding is only available when the frontend is connected to a Convex deployment.
+            Authentication is only available when the frontend is connected to a Convex deployment.
           </p>
           <div className="card-actions">
             <Link className="button-link" href="/">
@@ -86,10 +101,10 @@ export default function OnboardingPage() {
   return (
     <main className="standalone-shell">
       <section className="standalone-panel">
-        <p className="kicker">First run setup</p>
+        <p className="kicker">Create account</p>
         <h1>Create your LonghorNet profile</h1>
         <p className="lede">
-          Save the student profile that marketplace installs and private workflows will use by default.
+          Register with email and password, then save the student profile your marketplace installs and workflows will use by default.
         </p>
 
         <form className="profile-form" onSubmit={handleSubmit}>
@@ -120,6 +135,26 @@ export default function OnboardingPage() {
                 required
                 type="email"
                 value={formValues.email}
+              />
+            </label>
+            <label className="form-field">
+              <span>Password</span>
+              <input
+                minLength={8}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type="password"
+                value={password}
+              />
+            </label>
+            <label className="form-field">
+              <span>Confirm password</span>
+              <input
+                minLength={8}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                required
+                type="password"
+                value={confirmPassword}
               />
             </label>
             <label className="form-field">
@@ -198,6 +233,9 @@ export default function OnboardingPage() {
             <button disabled={isSubmitting} type="submit">
               {isSubmitting ? "Creating account..." : "Create account"}
             </button>
+            <Link className="button-link secondary" href={`/login?next=${encodeURIComponent(nextPath)}`}>
+              Sign in instead
+            </Link>
           </div>
         </form>
       </section>

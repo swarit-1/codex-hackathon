@@ -1,18 +1,42 @@
 import type {
   AgentLogRecord,
   AgentRecord,
-  MarketplaceTemplate,
   PendingActionRecord,
   RegistrationMonitorRecord,
   ScholarshipRecord,
   ScheduledTaskRecord,
-  TemplateSubmission,
 } from "./types/contracts.ts";
+
+interface RuntimeMarketplaceTemplate {
+  id: string;
+  title: string;
+  description: string;
+  source: "dev" | "student";
+  visibility: "public" | "private";
+  category: string;
+  installCount: number;
+  templateConfig: Record<string, unknown>;
+  agentType: "scholar" | "reg" | "custom";
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface RuntimeTemplateSubmission {
+  id: string;
+  userId: string;
+  templateId?: string;
+  status: string;
+  draftPayload?: Record<string, unknown>;
+  reviewerId?: string;
+  reviewNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface RuntimeStore {
   agents: Map<string, AgentRecord>;
-  marketplaceTemplates: Map<string, MarketplaceTemplate>;
-  templateSubmissions: Map<string, TemplateSubmission>;
+  marketplaceTemplates: Map<string, RuntimeMarketplaceTemplate>;
+  templateSubmissions: Map<string, RuntimeTemplateSubmission>;
   scholarships: Map<string, ScholarshipRecord>;
   registrationMonitors: Map<string, RegistrationMonitorRecord>;
   pendingActions: Map<string, PendingActionRecord>;
@@ -44,7 +68,7 @@ function nowIso(): string {
 
 function seedTemplates(): void {
   const ts = nowIso();
-  const baseTemplates: MarketplaceTemplate[] = [
+  const baseTemplates: RuntimeMarketplaceTemplate[] = [
     {
       id: SCHOLARBOT_TEMPLATE_ID,
       title: "ScholarBot",

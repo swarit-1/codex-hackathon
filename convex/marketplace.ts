@@ -48,7 +48,7 @@ export const listTemplates = query({
   handler: async (ctx, args) => {
     // Authz check BEFORE data access to prevent unauthorized reads
     if (args.ownerUserId) {
-      const actingUserId = await resolveActingUserId(ctx, args.ownerUserId);
+      const actingUserId = await resolveActingUserId(ctx, args.ownerUserId, (args as { sessionToken?: string }).sessionToken);
       await assertUserOwnsResource(ctx, actingUserId, args.ownerUserId);
     }
 
@@ -120,7 +120,7 @@ export const getTemplate = query({
 export const installTemplate = mutation({
   args: marketplaceInstallTemplateArgs,
   handler: async (ctx, args): Promise<TemplateInstallResult> => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const templateDoc = await getDoc<Omit<MarketplaceTemplateRecord, "id">>(ctx, args.templateId);
@@ -221,7 +221,7 @@ export const installTemplate = mutation({
 export const submitTemplate = mutation({
   args: marketplaceSubmitTemplateArgs,
   handler: async (ctx, args): Promise<TemplateSubmissionRecord> => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     if (args.templateId) {
@@ -286,7 +286,7 @@ export const submitTemplate = mutation({
 export const reviewSubmission = mutation({
   args: marketplaceReviewSubmissionArgs,
   handler: async (ctx, args): Promise<TemplateReviewResult> => {
-    const actingUserId = await resolveActingUserId(ctx, args.reviewerId);
+    const actingUserId = await resolveActingUserId(ctx, args.reviewerId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.reviewerId);
     await assertModerator(ctx, args.reviewerId);
 

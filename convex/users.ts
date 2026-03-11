@@ -31,6 +31,10 @@ function sanitizeForRead(profileData: JsonObject | undefined) {
   return sanitizeProfileDataForRead(profileData);
 }
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 async function assertEmailAvailable(
   ctx: any,
   email: string,
@@ -59,13 +63,14 @@ async function assertEmailAvailable(
 }
 
 async function doCreateProfile(ctx: any, args: any): Promise<UserProfileRecord> {
-  await assertEmailAvailable(ctx, args.email);
+  const email = normalizeEmail(args.email);
+  await assertEmailAvailable(ctx, email);
 
   const timestamp = Date.now();
   const profileData = await encryptCredentialVaultInProfileData(asJsonObject(args.profileData));
   const id = await insertDoc(ctx, "users", {
     name: args.name,
-    email: args.email,
+    email,
     eid: args.eid,
     authMethod: args.authMethod,
     profileData,
@@ -76,7 +81,7 @@ async function doCreateProfile(ctx: any, args: any): Promise<UserProfileRecord> 
   return {
     id,
     name: args.name,
-    email: args.email,
+    email,
     eid: args.eid,
     authMethod: args.authMethod,
     profileData: sanitizeForRead(profileData),
@@ -86,7 +91,8 @@ async function doCreateProfile(ctx: any, args: any): Promise<UserProfileRecord> 
 }
 
 async function doUpdateProfile(ctx: any, args: any): Promise<UserProfileRecord> {
-  const actingUserId = await resolveActingUserId(ctx, args.userId);
+  const email = normalizeEmail(args.email);
+  const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
   await assertCanActForUserId(ctx, actingUserId, args.userId);
 
   const existingById = await getDoc<Omit<UserProfileRecord, "id">>(ctx, args.userId);
@@ -97,25 +103,40 @@ async function doUpdateProfile(ctx: any, args: any): Promise<UserProfileRecord> 
     });
   }
 
-  await assertEmailAvailable(ctx, args.email, args.userId);
+  await assertEmailAvailable(ctx, email, args.userId);
 
   const timestamp = Date.now();
   const profileData = await encryptCredentialVaultInProfileData(asJsonObject(args.profileData));
 
   await patchDoc(ctx, args.userId, {
     name: args.name,
-    email: args.email,
+    email,
     eid: args.eid,
     authMethod: args.authMethod,
     profileData,
     updatedAt: timestamp,
   });
 
+  const credentialDocs = await queryByIndex<Record<string, unknown>>(
+    ctx,
+    "userCredentials",
+    "by_userId",
+    [["userId", args.userId]]
+  );
+  const credential = credentialDocs[0];
+
+  if (credential) {
+    await patchDoc(ctx, String(credential._id), {
+      email,
+      updatedAt: timestamp,
+    });
+  }
+
   return {
     ...toUserProfileRecord({
       ...existingById,
       name: args.name,
-      email: args.email,
+      email,
       eid: args.eid,
       authMethod: args.authMethod,
       profileData,
@@ -155,7 +176,7 @@ export const upsertProfile = mutation({
 export const getProfile = query({
   args: userProfileGetArgs,
   handler: async (ctx, args): Promise<UserProfileRecord | null> => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const user = await getDoc<Omit<UserProfileRecord, "id">>(ctx, args.userId);
