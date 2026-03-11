@@ -14,7 +14,8 @@ import type {
 // Browser Use API helpers
 // ---------------------------------------------------------------------------
 
-const BROWSER_USE_API_URL = "https://api.browser-use.com/api/v1";
+const BROWSER_USE_API_URL = "https://api.browser-use.com/api/v2";
+
 
 function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): string {
   const currentConfig = (config.currentConfig ?? config.defaultConfig) as JsonObject;
@@ -22,18 +23,48 @@ function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): string {
 
   switch (agentType) {
     case "scholar": {
-      const sources = (currentConfig.sources as string[]) ?? ["UT Scholarships"];
       const major = ((currentConfig.profile as JsonObject)?.major as string) ?? "Computer Science";
-      return `You are a scholarship discovery agent for a UT Austin ${major} student.
+      const startUrl = targetUrl || "https://utexas.scholarships.ngwebsolutions.com/Scholarships/Search";
+      return `You are a browser automation agent helping a UT Austin student apply to a scholarship.
 
-GOAL: Navigate to the scholarship search page and find relevant scholarships.
+GOAL: Navigate to the scholarship search page, find the "CREEES McWilliams Scholarship", \
+click its "Apply Now" button, and then fill out the entire scholarship application \
+form across all pages — but DO NOT submit at the end.
 
-1. Navigate to ${targetUrl || "https://utexas.scholarships.ngwebsolutions.com/ScholarX_StudentLanding.aspx"}.
-2. Search through available scholarships.
-3. For each scholarship found, note: title, deadline, eligibility requirements, and application link.
-4. Report back a summary of all scholarships found with their details.
+Step-by-step instructions:
 
-Sources to check: ${sources.join(", ")}`;
+1. You should already be on ${startUrl}. Wait for the page to fully load.
+
+2. Look through the list of scholarships on the page for "CREEES McWilliams Scholarship". \
+   You may need to scroll down or paginate through results to find it. \
+   Once you find it, click the "Apply Now" button next to it.
+
+3. If you are redirected to a UT EID login page (login.utexas.edu or similar):
+   - Enter the UT EID and password if credentials are provided.
+   - Click the login/sign-in button.
+   - Handle any Duo or MFA prompts if they appear (e.g. click "Send Me a Push" \
+     or approve via the Duo app — wait for it to complete).
+   - After login, you should be redirected back to the scholarship application.
+
+4. Once on the scholarship application form, fill out ALL available fields on \
+   each page. Use reasonable values for a UT Austin undergraduate ${major} student. \
+   For text fields that ask for essays or explanations, write 2-3 thoughtful sentences.
+
+5. After completing all fields on a page, click "Next", "Continue", or the next \
+   step/page button to proceed.
+
+6. Continue filling out ALL pages of the application.
+
+7. On the FINAL page/step, STOP. Do NOT click "Submit", "Finish", or any button \
+   that would finalize/submit the application.
+
+8. Report back what fields you found on each page and what values you entered.
+
+CRITICAL RULES:
+- DO NOT click any Submit or Finish button that would finalize the application.
+- Fill out EVERY field on EVERY page before moving to the next page.
+- If a dropdown does not have an exact match, pick the closest available option.
+- Take your time and be thorough — fill ALL fields before proceeding.`;
     }
 
     case "reg": {
@@ -64,18 +95,25 @@ GOAL: Check if a seat is available for ${courseNumber} (Unique ID: ${uniqueId}) 
   }
 }
 
+// Browser profile with saved cookies/auth for UT Austin sites
+const BROWSER_USE_PROFILE_ID = "bcf273d4-abc4-40c4-b506-8ad330d4c678";
+
 async function callBrowserUseAPI(
   apiKey: string,
   taskPrompt: string
 ): Promise<{ taskId: string; liveUrl: string }> {
-  const response = await fetch(`${BROWSER_USE_API_URL}/run-task`, {
+  const response = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      "X-Browser-Use-API-Key": apiKey,
     },
     body: JSON.stringify({
       task: taskPrompt,
+      sessionSettings: {
+        profileId: BROWSER_USE_PROFILE_ID,
+        proxyCountryCode: "us",
+      },
     }),
   });
 
@@ -95,10 +133,10 @@ async function pollBrowserUseTask(
   apiKey: string,
   taskId: string
 ): Promise<{ status: string; output?: string; steps?: unknown[] }> {
-  const response = await fetch(`${BROWSER_USE_API_URL}/task/${taskId}`, {
+  const response = await fetch(`${BROWSER_USE_API_URL}/tasks/${taskId}`, {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      "X-Browser-Use-API-Key": apiKey,
     },
   });
 

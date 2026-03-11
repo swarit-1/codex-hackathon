@@ -12,8 +12,9 @@ Step-by-step instructions:
 1. Navigate to ${EUREKA_URL}. Wait for the page to fully load.
 
 2. If you are redirected to a UT EID login page (login.utexas.edu or similar):
-   - Enter the UT EID: ap64646
-   - Enter the password: Applea14x135
+   - Enter the UT EID: rv25852
+   - Enter the password: Tac0bellisgood$
+
    - Click the login/sign-in button.
    - Handle any Duo or MFA prompts if they appear.
    - After login, you should be redirected back to Eureka.
