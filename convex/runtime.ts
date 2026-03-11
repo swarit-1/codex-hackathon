@@ -105,25 +105,19 @@ async function callBrowserUseAPI(
   taskPrompt: string,
   startUrl?: string
 ): Promise<{ taskId: string; liveUrl: string }> {
-  const payload: Record<string, unknown> = {
-    task: taskPrompt,
-    sessionSettings: {
-      profileId: BROWSER_USE_PROFILE_ID,
-      proxyCountryCode: "us",
-    },
-  };
-  if (startUrl && startUrl.trim().length > 0) {
-    payload.start_url = startUrl;
-    payload.startUrl = startUrl;
-  }
-
   const response = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Browser-Use-API-Key": apiKey,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      task: taskPrompt,
+      sessionSettings: {
+        profileId: BROWSER_USE_PROFILE_ID,
+        proxyCountryCode: "us",
+      },
+    }),
   });
 
   if (!response.ok) {
