@@ -264,6 +264,7 @@ export type Agent = {
   source: TemplateSource;
   type: "scholar" | "reg" | "eureka" | "custom" | "im";
   status: AgentStatus;
+  config?: ConfigEnvelope;
   pendingActionCount: number;
   currentRun?: AgentRun;
   latestSummary: string;

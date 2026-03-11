@@ -11,19 +11,21 @@ import {
   useRequireCurrentUser,
 } from "../../lib/hooks";
 import type { Agent } from "../../lib/contracts/types";
-import { getErrorMessage } from "../../lib/utils";
+import { buildConfigEnvelope, getErrorMessage, type EditableConfigValue } from "../../lib/utils";
 
 export default function MyAgentsPage() {
   const convexEnabled = useConvexEnabled();
   const { isReady, isLoading, needsOnboarding } = useRequireCurrentUser();
   const { agents } = useInstalledAgents();
   const { events } = useAgentEvents();
-  const { runNow, updateStatus, deleteAgent } = useAgentActions();
+  const { runNow, updateConfig, updateStatus, deleteAgent } = useAgentActions();
   const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<"progress" | "results" | "history">("progress");
   const [busyAgentId, setBusyAgentId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [configSuccess, setConfigSuccess] = useState<string | null>(null);
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0];
   const details = useAgentDetails(selectedAgent?.id);
 
@@ -93,6 +95,29 @@ export default function MyAgentsPage() {
     }
   };
 
+  const handleSaveConfig = async (
+    agent: Agent,
+    currentValues: Record<string, EditableConfigValue>
+  ) => {
+    if (!agent.config) {
+      return;
+    }
+
+    setBusyAgentId(agent.id);
+    setConfigError(null);
+    setConfigSuccess(null);
+
+    try {
+      await updateConfig(agent.id, buildConfigEnvelope(agent.config, currentValues));
+      setConfigSuccess("Agent details updated. Future runs will use the new settings.");
+      setTimeout(() => setConfigSuccess(null), 5000);
+    } catch (error) {
+      setConfigError(getErrorMessage(error, "Agent details could not be updated."));
+    } finally {
+      setBusyAgentId(null);
+    }
+  };
+
   return (
     <AppShell currentPath="/my-agents">
       <section className="page-section intro-section">
@@ -149,6 +174,16 @@ export default function MyAgentsPage() {
           activeTab={activeTab}
           agent={selectedAgent}
           details={details}
+          editControls={
+            convexEnabled
+              ? {
+                  isSaving: busyAgentId === selectedAgent?.id,
+                  error: configError,
+                  success: configSuccess,
+                  onSave: handleSaveConfig,
+                }
+              : undefined
+          }
           onTabChange={setActiveTab}
         />
       </section>

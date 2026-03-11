@@ -298,6 +298,13 @@ function buildInputSchema(seed: DemoTemplateSeed) {
           required: true,
         },
         {
+          key: "eidPassword",
+          label: "UT password",
+          type: "password",
+          required: false,
+          description: "Optional. Leave blank if you only want seat checks that do not require login.",
+        },
+        {
           key: "uniqueId",
           label: "Course Unique Id",
           type: "text",
@@ -319,6 +326,13 @@ function buildInputSchema(seed: DemoTemplateSeed) {
           label: "Conflict policy",
           type: "textarea",
           required: true,
+        },
+        {
+          key: "watchlistCourses",
+          label: "Additional watchlist courses",
+          type: "textarea",
+          required: false,
+          description: "One per line: Course Number | Unique ID | Semester",
         },
       ],
     } as ConfigEnvelope["inputSchema"];
@@ -429,9 +443,11 @@ function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
         ? {
             courseNumber: "",
             eidLogin: "",
+            eidPassword: "",
             uniqueId: "",
             semester: "Fall 2026",
             conflictPolicy: "",
+            watchlistCourses: "",
           }
         : {}),
       ...(seed.title === "ScholarBot"
@@ -471,9 +487,11 @@ function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
         ? {
             courseNumber: "",
             eidLogin: "",
+            eidPassword: "",
             uniqueId: "",
             semester: "Fall 2026",
             conflictPolicy: "",
+            watchlistCourses: "",
           }
         : {}),
       ...(seed.title === "ScholarBot"

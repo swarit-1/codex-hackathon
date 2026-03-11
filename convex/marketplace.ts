@@ -14,6 +14,10 @@ import {
   mergeInstalledConfig,
   resolveInstalledSchedule,
 } from "./lib/marketplace";
+import {
+  prepareAgentConfigForStorage,
+  syncRegistrationMonitorsForConfig,
+} from "./lib/agentConfig";
 import { paginateItems } from "./lib/pagination";
 import {
   toAgentRecord,
@@ -157,7 +161,9 @@ export const installTemplate = mutation({
     }
 
     const timestamp = Date.now();
-    const config = mergeInstalledConfig(template.templateConfig, args.config);
+    const config = await prepareAgentConfigForStorage(
+      mergeInstalledConfig(template.templateConfig, args.config)
+    );
     const schedule = assertValidScheduleConfig(
       resolveInstalledSchedule(config, template.templateConfig.defaultSchedule)
     );
@@ -180,33 +186,12 @@ export const installTemplate = mutation({
     });
 
     if (template.templateType === "reg") {
-      const currentConfig = (config.currentConfig ?? config.defaultConfig) as Record<string, unknown>;
-      const courseNumber =
-        typeof currentConfig.courseNumber === "string" ? currentConfig.courseNumber.trim() : "";
-      const uniqueId =
-        typeof currentConfig.uniqueId === "string" ? currentConfig.uniqueId.trim() : "";
-      const semester =
-        typeof currentConfig.semester === "string" ? currentConfig.semester.trim() : "";
-      const pollIntervalMinutes =
-        typeof currentConfig.pollIntervalMinutes === "number"
-          ? currentConfig.pollIntervalMinutes
-          : typeof currentConfig.pollIntervalMinutes === "string"
-            ? Number(currentConfig.pollIntervalMinutes)
-            : 10;
-
-      if (courseNumber && uniqueId && semester) {
-        await insertDoc(ctx, "registrationMonitors", {
-          userId: args.userId,
-          agentId,
-          courseNumber,
-          uniqueId,
-          semester,
-          status: "watching",
-          pollInterval: Number.isFinite(pollIntervalMinutes) ? Math.max(1, pollIntervalMinutes) : 10,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        });
-      }
+      await syncRegistrationMonitorsForConfig(ctx, {
+        userId: args.userId,
+        agentId,
+        config,
+        timestamp,
+      });
     }
 
     await patchDoc(ctx, args.templateId, {

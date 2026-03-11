@@ -10,6 +10,7 @@ import type {
   AgentDetailData,
   AgentEvent,
   AgentStatus,
+  ConfigEnvelope,
 } from "../contracts/types";
 import {
   toAgentEvent,
@@ -317,6 +318,7 @@ export function useAgentActions() {
   const convexEnabled = useConvexEnabled();
   const { sessionToken } = useCurrentUser();
   const runNowMutation = useMutation(api.agents.runNow);
+  const updateConfigMutation = useMutation(api.agents.updateConfig);
   const updateStatusMutation = useMutation(api.agents.updateStatus);
   const deleteAgentMutation = useMutation(api.agents.deleteAgent);
 
@@ -340,6 +342,17 @@ export function useAgentActions() {
         sessionToken,
         agentId: agentId as Id<"agents">,
         status,
+      });
+    },
+    updateConfig: async (agentId: string, config: ConfigEnvelope) => {
+      if (!convexEnabled || !sessionToken) {
+        return null;
+      }
+
+      return updateConfigMutation({
+        sessionToken,
+        agentId: agentId as Id<"agents">,
+        config: config as never,
       });
     },
     deleteAgent: async (agentId: string) => {

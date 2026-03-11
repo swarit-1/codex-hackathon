@@ -57,10 +57,23 @@ function createRegBotTemplateConfig(
     inputSchema: {
       fields: [
         {
+          key: "courseNumber",
+          label: "Course number",
+          type: "text",
+          required: true,
+        },
+        {
           key: "eidLogin",
           label: "EID login",
           type: "text",
           required: true,
+        },
+        {
+          key: "eidPassword",
+          label: "UT password",
+          type: "password",
+          required: false,
+          description: "Optional. Leave blank if you only want seat checks that do not require login.",
         },
         {
           key: "uniqueId",
@@ -85,23 +98,36 @@ function createRegBotTemplateConfig(
           type: "textarea",
           required: true,
         },
+        {
+          key: "watchlistCourses",
+          label: "Additional watchlist courses",
+          type: "textarea",
+          required: false,
+          description: "One per line: Course Number | Unique ID | Semester",
+        },
       ],
     } as ConfigEnvelope["inputSchema"],
     defaultConfig: {
       cadenceLabel,
       outcomes,
+      courseNumber: "",
       eidLogin: "",
+      eidPassword: "",
       uniqueId: "",
       semester: "Fall 2026",
       conflictPolicy: "",
+      watchlistCourses: "",
     },
     currentConfig: {
       cadenceLabel,
       outcomes,
+      courseNumber: "",
       eidLogin: "",
+      eidPassword: "",
       uniqueId: "",
       semester: "Fall 2026",
       conflictPolicy: "",
+      watchlistCourses: "",
     },
     defaultSchedule: {
       enabled: true,
@@ -133,7 +159,15 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
     visibility: "public",
     status: "ready",
     scheduleDefault: "Every 10 minutes with retry jitter",
-    setupFields: ["EID login", "Course Unique Id", "Preferred semester", "Conflict policy"],
+    setupFields: [
+      "Course number",
+      "EID login",
+      "UT password",
+      "Course Unique Id",
+      "Preferred semester",
+      "Conflict policy",
+      "Additional watchlist courses",
+    ],
     outcomes: ["Seat monitoring", "Conflict confirmation", "Duo retry handling"],
     templateConfig: createRegBotTemplateConfig(
       "Every 10 minutes with retry jitter",

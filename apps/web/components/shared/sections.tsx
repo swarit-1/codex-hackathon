@@ -160,6 +160,7 @@ export function MarketplaceCard({
                         rows={4}
                         value={String(value ?? "")}
                       />
+                      {field.description ? <small className="field-hint">{field.description}</small> : null}
                     </label>
                   );
                 }
@@ -188,6 +189,7 @@ export function MarketplaceCard({
                           </option>
                         ))}
                       </select>
+                      {field.description ? <small className="field-hint">{field.description}</small> : null}
                     </label>
                   );
                 }
@@ -224,9 +226,14 @@ export function MarketplaceCard({
                         }))
                       }
                       required={field.required}
-                      type={field.type === "email" || field.type === "url" ? field.type : "text"}
+                      type={
+                        field.type === "email" || field.type === "url" || field.type === "password"
+                          ? field.type
+                          : "text"
+                      }
                       value={String(value ?? "")}
                     />
+                    {field.description ? <small className="field-hint">{field.description}</small> : null}
                   </label>
                 );
               })}
@@ -587,12 +594,46 @@ export function AgentDetailPanel({
   details,
   activeTab,
   onTabChange,
+  editControls,
 }: {
   agent?: Agent;
   details: AgentDetailData;
   activeTab: "progress" | "results" | "history";
   onTabChange: (tab: "progress" | "results" | "history") => void;
+  editControls?: {
+    isSaving?: boolean;
+    error?: string | null;
+    success?: string | null;
+    onSave?: (
+      agent: Agent,
+      currentValues: Record<string, EditableConfigValue>
+    ) => Promise<void> | void;
+  };
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentValues, setCurrentValues] = useState<Record<string, EditableConfigValue>>({});
+  const { supportedFields, unsupportedFields } = useMemo(
+    () =>
+      agent?.config
+        ? extractConfigFields(agent.config.inputSchema)
+        : { supportedFields: [], unsupportedFields: [] },
+    [agent?.config]
+  );
+  const hasPasswordField = supportedFields.some((field) => field.type === "password");
+
+  useEffect(() => {
+    if (!agent?.config) {
+      setCurrentValues({});
+      return;
+    }
+
+    setCurrentValues(getEditableConfigValues(agent.config));
+  }, [agent?.config, agent?.id]);
+
+  useEffect(() => {
+    setIsEditing(false);
+  }, [agent?.id]);
+
   if (!agent) {
     return (
       <div className="table-shell">
@@ -631,6 +672,15 @@ export function AgentDetailPanel({
           <span className="status-chip neutral">
             {currentRun?.phaseLabel ?? "Idle"}
           </span>
+          {editControls?.onSave && agent.config ? (
+            <button
+              className="secondary"
+              onClick={() => setIsEditing((currentValue) => !currentValue)}
+              type="button"
+            >
+              {isEditing ? "Close editor" : "Edit details"}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -650,6 +700,153 @@ export function AgentDetailPanel({
 
       {activeTab === "progress" ? (
         <div className="detail-panel-grid">
+          {isEditing && agent.config && editControls?.onSave ? (
+            <article className="detail-card detail-card-wide">
+              <h4>Edit agent details</h4>
+              <form
+                className="inline-form"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  await editControls.onSave?.(agent, currentValues);
+                }}
+              >
+                {supportedFields.length > 0 ? (
+                  <div className="field-grid">
+                    {supportedFields.map((field) => {
+                      const value = currentValues[field.key];
+
+                      if (field.type === "textarea") {
+                        return (
+                          <label
+                            key={field.key}
+                            className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                          >
+                            <span>{field.label}</span>
+                            <textarea
+                              onChange={(event) =>
+                                setCurrentValues((previousValues) => ({
+                                  ...previousValues,
+                                  [field.key]: event.target.value,
+                                }))
+                              }
+                              required={field.required}
+                              rows={4}
+                              value={String(value ?? "")}
+                            />
+                            {field.description ? <small className="field-hint">{field.description}</small> : null}
+                          </label>
+                        );
+                      }
+
+                      if (field.type === "select") {
+                        return (
+                          <label
+                            key={field.key}
+                            className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                          >
+                            <span>{field.label}</span>
+                            <select
+                              onChange={(event) =>
+                                setCurrentValues((previousValues) => ({
+                                  ...previousValues,
+                                  [field.key]: event.target.value,
+                                }))
+                              }
+                              required={field.required}
+                              value={String(value ?? "")}
+                            >
+                              <option value="">Select an option</option>
+                              {(field.options ?? []).map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                                ))}
+                            </select>
+                            {field.description ? <small className="field-hint">{field.description}</small> : null}
+                          </label>
+                        );
+                      }
+
+                      if (field.type === "boolean" || field.type === "checkbox") {
+                        return (
+                          <label key={field.key} className="checkbox-field">
+                            <input
+                              checked={Boolean(value)}
+                              onChange={(event) =>
+                                setCurrentValues((previousValues) => ({
+                                  ...previousValues,
+                                  [field.key]: event.target.checked,
+                                }))
+                              }
+                              type="checkbox"
+                            />
+                            <span>{field.label}</span>
+                          </label>
+                        );
+                      }
+
+                      return (
+                        <label
+                          key={field.key}
+                          className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                        >
+                          <span>{field.label}</span>
+                          <input
+                            onChange={(event) =>
+                              setCurrentValues((previousValues) => ({
+                                ...previousValues,
+                                [field.key]: event.target.value,
+                              }))
+                            }
+                            required={field.required}
+                            type={
+                              field.type === "email" || field.type === "url" || field.type === "password"
+                                ? field.type
+                                : "text"
+                            }
+                            value={String(value ?? "")}
+                          />
+                          {field.description ? <small className="field-hint">{field.description}</small> : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="form-note">This agent has no editable setup fields.</p>
+                )}
+
+                {hasPasswordField ? (
+                  <p className="form-note">
+                    Leave the password field blank to keep the stored password unchanged.
+                  </p>
+                ) : null}
+                {unsupportedFields.length > 0 ? (
+                  <p className="form-note">
+                    Some advanced fields are still fixed to their stored values.
+                  </p>
+                ) : null}
+                {editControls.error ? <p className="form-message error">{editControls.error}</p> : null}
+                {editControls.success ? <p className="form-message success">{editControls.success}</p> : null}
+
+                <div className="card-actions">
+                  <button disabled={editControls.isSaving} type="submit">
+                    {editControls.isSaving ? "Saving..." : "Save changes"}
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => {
+                      setCurrentValues(getEditableConfigValues(agent.config!));
+                      setIsEditing(false);
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </article>
+          ) : null}
+
           <article className="detail-card">
             <h4>Current run</h4>
             <dl className="detail-list">

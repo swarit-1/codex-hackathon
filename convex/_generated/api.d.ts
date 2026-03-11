@@ -19,6 +19,7 @@ import type * as dashboard from "../dashboard.js";
 import type * as demo from "../demo.js";
 import type * as flowforge from "../flowforge.js";
 import type * as labOpenings from "../labOpenings.js";
+import type * as lib_agentConfig from "../lib/agentConfig.js";
 import type * as lib_agentRuns from "../lib/agentRuns.js";
 import type * as lib_agentUtils from "../lib/agentUtils.js";
 import type * as lib_cronParser from "../lib/cronParser.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   demo: typeof demo;
   flowforge: typeof flowforge;
   labOpenings: typeof labOpenings;
+  "lib/agentConfig": typeof lib_agentConfig;
   "lib/agentRuns": typeof lib_agentRuns;
   "lib/agentUtils": typeof lib_agentUtils;
   "lib/cronParser": typeof lib_cronParser;

@@ -47,7 +47,8 @@ export const pendingActionTypeValidator = v.union(
   v.literal("essay"),
   v.literal("detail"),
   v.literal("confirmation"),
-  v.literal("email_draft")
+  v.literal("email_draft"),
+  v.literal("duo_reauth")
 );
 
 export const templateSourceValidator = v.union(v.literal("dev"), v.literal("student"));
@@ -327,6 +328,12 @@ export const agentUpdateScheduleArgs = {
   ...sessionTokenArg,
   agentId: v.id("agents"),
   schedule: scheduleConfigValidator,
+};
+
+export const agentUpdateConfigArgs = {
+  ...sessionTokenArg,
+  agentId: v.id("agents"),
+  config: configEnvelopeValidator,
 };
 
 export const agentDeleteArgs = {

@@ -204,6 +204,7 @@ export function toAgentUI(
     source,
     type: record.type,
     status: record.status,
+    config: record.config as Agent["config"],
     pendingActionCount,
     currentRun: mappedRun,
     latestSummary,

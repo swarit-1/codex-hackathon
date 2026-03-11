@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { getDoc, insertDoc, patchDoc, queryByIndex } from "./lib/db";
 import { appendAgentLog } from "./lib/logging";
+import { getRegistrationTargets, hydrateRuntimeConfig } from "./lib/agentConfig";
 import type {
   AgentRunErrorCategory,
   AgentRunPhase,
@@ -219,8 +220,9 @@ function normalizeStringList(value: unknown, fallback: string[] = []): string[] 
   return fallback;
 }
 
-function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): string {
-  const currentConfig = getCurrentConfig(config);
+async function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): Promise<string> {
+  const runtimeConfig = await hydrateRuntimeConfig(config);
+  const currentConfig = getCurrentConfig(runtimeConfig);
   const targetUrl = (currentConfig.targetUrl as string) ?? "";
 
   switch (agentType) {
@@ -269,37 +271,52 @@ Return the final result as JSON only inside a \`\`\`json code block using this s
 
     case "reg": {
       const eidLogin = (currentConfig.eidLogin as string) ?? "";
-      const courseNumber = (currentConfig.courseNumber as string) ?? "";
-      const uniqueId = (currentConfig.uniqueId as string) ?? "";
-      const semester = (currentConfig.semester as string) ?? "";
+      const eidPassword = (currentConfig.eidPassword as string) ?? "";
       const conflictPolicy = (currentConfig.conflictPolicy as string) ?? "";
+      const courseTargets = getRegistrationTargets(runtimeConfig);
+      const courseTargetLines =
+        courseTargets.length > 0
+          ? courseTargets
+              .map(
+                (target, index) =>
+                  `${index + 1}. ${target.courseNumber} (Unique ID: ${target.uniqueId}) for ${target.semester}`
+              )
+              .join("\n")
+          : "1. Review the configured course target.";
 
       return `You are a class registration monitor for a UT Austin student.
 
-GOAL: Check if a seat is available for ${courseNumber} (Unique ID: ${uniqueId}) for ${semester}.
+GOAL: Check if seats are available for the student's configured UT registration targets.
 
 1. Navigate to ${targetUrl || "https://utdirect.utexas.edu/registration/classlist/nologin/"}.
-2. Search for course ${courseNumber} with unique ID ${uniqueId}.
-3. Check if there are any open seats available.
-4. If login is needed, use the provided EID login only if it is supplied for this run. Do not guess credentials.
-5. Report the current enrollment status: total seats, seats taken, seats available, and waitlist count if any.
-6. Do not attempt to register for the class.
+2. Check these course targets:
+${courseTargetLines}
+3. For each target, check if there are any open seats available.
+4. If login is needed, use the provided EID login and password only if both are supplied for this run. Do not guess credentials.
+5. Report the current enrollment status for each target: total seats, seats taken, seats available, and waitlist count if any.
+6. Do not attempt to register for any class.
 
 Student preferences:
 - EID login: ${eidLogin || "not provided"}
+- EID password: ${eidPassword ? "provided for this run" : "not provided"}
 ${conflictPolicy ? `- Conflict policy: ${conflictPolicy}` : "- Conflict policy: none provided"}
 
 Return the final result as JSON only inside a \`\`\`json code block using this shape:
 {
-  "courseNumber": "${courseNumber}",
-  "uniqueId": "${uniqueId}",
-  "semester": "${semester}",
-  "status": "open | closed | waitlist | unknown",
-  "totalSeats": 0,
-  "seatsTaken": 0,
-  "seatsAvailable": 0,
-  "waitlistCount": 0,
-  "notes": "string"
+  "courses": [
+    {
+      "courseNumber": "string",
+      "uniqueId": "string",
+      "semester": "string",
+      "status": "open | closed | waitlist | unknown",
+      "totalSeats": 0,
+      "seatsTaken": 0,
+      "seatsAvailable": 0,
+      "waitlistCount": 0,
+      "notes": "string"
+    }
+  ],
+  "summary": "string"
 }`;
     }
 
@@ -702,111 +719,135 @@ async function processRegistrationOutput(
 ): Promise<RuntimeProcessingResult> {
   const payload = extractJsonPayload(output);
   const currentConfig = getCurrentConfig(agent.config);
-  const courseNumber =
-    toNonEmptyString(payload?.courseNumber) ??
-    toNonEmptyString(currentConfig.courseNumber) ??
-    "Unknown course";
-  const uniqueId =
-    toNonEmptyString(payload?.uniqueId) ??
-    toNonEmptyString(currentConfig.uniqueId) ??
-    "Unknown unique ID";
-  const semester =
-    toNonEmptyString(payload?.semester) ??
-    toNonEmptyString(currentConfig.semester) ??
-    "Unknown semester";
-  const seatsAvailable = Math.max(0, toFiniteNumber(payload?.seatsAvailable) ?? 0);
-  const waitlistCount = Math.max(0, toFiniteNumber(payload?.waitlistCount) ?? 0);
-  const totalSeats = toFiniteNumber(payload?.totalSeats);
-  const seatsTaken = toFiniteNumber(payload?.seatsTaken);
-  const notes = toNonEmptyString(payload?.notes);
-  const statusValue = toNonEmptyString(payload?.status)?.toLowerCase() ?? "unknown";
-  const status: RegistrationMonitorRecord["status"] =
-    statusValue === "unknown" && seatsAvailable === 0 && waitlistCount === 0 ? "failed" : "watching";
+  const fallbackSemester =
+    toNonEmptyString(currentConfig.semester) ?? "Unknown semester";
+  const rawCourses = Array.isArray(payload?.courses) ? payload.courses : [payload];
+  const summary = toNonEmptyString(payload?.summary);
   const pollInterval = Math.max(1, toFiniteNumber(currentConfig.pollIntervalMinutes) ?? 10);
-
-  const existing = (
-    await queryByIndex<Omit<RegistrationMonitorRecord, "id">>(
-      ctx,
-      "registrationMonitors",
-      "by_agentId",
-      [["agentId", agent.id]]
-    )
-  ).find(
-    (monitor) =>
-      String((monitor as { uniqueId?: unknown }).uniqueId) === uniqueId &&
-      String((monitor as { semester?: unknown }).semester) === semester
+  const existingMonitors = await queryByIndex<Omit<RegistrationMonitorRecord, "id">>(
+    ctx,
+    "registrationMonitors",
+    "by_agentId",
+    [["agentId", agent.id]]
+  );
+  const existingByKey = new Map(
+    existingMonitors.map((monitor) => [
+      `${String((monitor as { uniqueId?: unknown }).uniqueId)}::${String((monitor as { semester?: unknown }).semester)}`,
+      monitor,
+    ])
   );
 
-  const timestamp = Date.now();
+  let processedCount = 0;
+  let coursesWithOpenSeats = 0;
+  let totalSeatsAvailable = 0;
+  let totalWaitlistCount = 0;
 
-  if (existing) {
-    await patchDoc(ctx, String((existing as { _id: string })._id), {
-      courseNumber,
-      uniqueId,
-      semester,
-      status,
-      pollInterval,
-      updatedAt: timestamp,
-    });
-  } else {
-    await insertDoc(ctx, "registrationMonitors", {
-      userId: agent.userId,
+  for (const entry of rawCourses) {
+    const record = asObject(entry);
+
+    if (!record) {
+      continue;
+    }
+
+    const courseNumber =
+      toNonEmptyString(record.courseNumber) ??
+      toNonEmptyString(currentConfig.courseNumber) ??
+      "Unknown course";
+    const uniqueId =
+      toNonEmptyString(record.uniqueId) ??
+      toNonEmptyString(currentConfig.uniqueId) ??
+      "Unknown unique ID";
+    const semester =
+      toNonEmptyString(record.semester) ??
+      fallbackSemester;
+    const seatsAvailable = Math.max(0, toFiniteNumber(record.seatsAvailable) ?? 0);
+    const waitlistCount = Math.max(0, toFiniteNumber(record.waitlistCount) ?? 0);
+    const totalSeats = toFiniteNumber(record.totalSeats);
+    const seatsTaken = toFiniteNumber(record.seatsTaken);
+    const notes = toNonEmptyString(record.notes);
+    const statusValue = toNonEmptyString(record.status)?.toLowerCase() ?? "unknown";
+    const status: RegistrationMonitorRecord["status"] =
+      statusValue === "unknown" && seatsAvailable === 0 && waitlistCount === 0 ? "failed" : "watching";
+    const timestamp = Date.now();
+    const existing = existingByKey.get(`${uniqueId}::${semester}`);
+
+    if (existing) {
+      await patchDoc(ctx, String((existing as { _id: string })._id), {
+        courseNumber,
+        uniqueId,
+        semester,
+        status,
+        pollInterval,
+        updatedAt: timestamp,
+      });
+    } else {
+      await insertDoc(ctx, "registrationMonitors", {
+        userId: agent.userId,
+        agentId: agent.id,
+        courseNumber,
+        uniqueId,
+        semester,
+        status,
+        pollInterval,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+    }
+
+    const detailParts = [
+      `${courseNumber} (${uniqueId}) for ${semester}`,
+      totalSeats !== undefined && seatsTaken !== undefined
+        ? `${Math.max(totalSeats - seatsTaken, seatsAvailable)} seat${Math.max(totalSeats - seatsTaken, seatsAvailable) === 1 ? "" : "s"} open`
+        : `${seatsAvailable} seat${seatsAvailable === 1 ? "" : "s"} open`,
+      `waitlist ${waitlistCount}`,
+    ];
+
+    await appendAgentLog(ctx, {
       agentId: agent.id,
-      courseNumber,
-      uniqueId,
-      semester,
-      status,
-      pollInterval,
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      runId,
+      phase: "writing_results",
+      event: seatsAvailable > 0 ? "registration.seat.available" : "registration.scan.completed",
+      level: seatsAvailable > 0 ? "warning" : status === "failed" ? "error" : "info",
+      details: {
+        title: seatsAvailable > 0 ? "Seat alert" : "Registration check completed",
+        detail: `${detailParts.join(" · ")}${notes ? ` · ${notes}` : ""}`,
+        courseNumber,
+        uniqueId,
+        semester,
+        seatsAvailable,
+        waitlistCount,
+        notes,
+      },
     });
-  }
 
-  const detailParts = [
-    `${courseNumber} (${uniqueId}) for ${semester}`,
-    totalSeats !== undefined && seatsTaken !== undefined
-      ? `${Math.max(totalSeats - seatsTaken, seatsAvailable)} seat${Math.max(totalSeats - seatsTaken, seatsAvailable) === 1 ? "" : "s"} open`
-      : `${seatsAvailable} seat${seatsAvailable === 1 ? "" : "s"} open`,
-    `waitlist ${waitlistCount}`,
-  ];
+    if (seatsAvailable > 0) {
+      coursesWithOpenSeats += 1;
+      await ensurePendingAction(ctx, {
+        userId: agent.userId,
+        agentId: agent.id,
+        type: "confirmation",
+        prompt: `Seat available for ${courseNumber} (${uniqueId}) in ${semester}. Review the opening now.`,
+      });
+    }
 
-  await appendAgentLog(ctx, {
-    agentId: agent.id,
-    runId,
-    phase: "writing_results",
-    event: seatsAvailable > 0 ? "registration.seat.available" : "registration.scan.completed",
-    level: seatsAvailable > 0 ? "warning" : status === "failed" ? "error" : "info",
-    details: {
-      title: seatsAvailable > 0 ? "Seat alert" : "Registration check completed",
-      detail: `${detailParts.join(" · ")}${notes ? ` · ${notes}` : ""}`,
-      courseNumber,
-      uniqueId,
-      semester,
-      seatsAvailable,
-      waitlistCount,
-      notes,
-    },
-  });
-
-  if (seatsAvailable > 0) {
-    await ensurePendingAction(ctx, {
-      userId: agent.userId,
-      agentId: agent.id,
-      type: "confirmation",
-      prompt: `Seat available for ${courseNumber} (${uniqueId}) in ${semester}. Review the opening now.`,
-    });
+    processedCount += 1;
+    totalSeatsAvailable += seatsAvailable;
+    totalWaitlistCount += waitlistCount;
   }
 
   return {
     summary:
-      seatsAvailable > 0
-        ? `${seatsAvailable} seat${seatsAvailable === 1 ? "" : "s"} opened for ${courseNumber} (${uniqueId}).`
-        : waitlistCount > 0
-          ? `No seats yet for ${courseNumber} (${uniqueId}); waitlist is ${waitlistCount}.`
-          : `No seats yet for ${courseNumber} (${uniqueId}).`,
+      summary ??
+      (coursesWithOpenSeats > 0
+        ? `${coursesWithOpenSeats} watched course${coursesWithOpenSeats === 1 ? "" : "s"} now ha${coursesWithOpenSeats === 1 ? "s" : "ve"} open seats.`
+        : processedCount > 0
+          ? `Checked ${processedCount} course target${processedCount === 1 ? "" : "s"}. No seats available right now.`
+          : "No registration results were parsed from the latest run."),
     resultCounts: {
-      seatsAvailable,
-      waitlistCount,
+      coursesChecked: processedCount,
+      openCourses: coursesWithOpenSeats,
+      seatsAvailable: totalSeatsAvailable,
+      waitlistCount: totalWaitlistCount,
     },
   };
 }
@@ -1118,7 +1159,7 @@ export const launchBrowserTask = internalAction({
       summary: "Starting browser session.",
     });
 
-    const taskPrompt = buildTaskPrompt(
+    const taskPrompt = await buildTaskPrompt(
       args.agentType as AgentType,
       args.config as ConfigEnvelope
     );

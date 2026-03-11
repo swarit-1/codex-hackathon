@@ -251,4 +251,20 @@ export default defineSchema({
     scenarioId: v.optional(scenarioIdValidator),
     phase: v.optional(agentRunPhaseValidator),
   }).index("by_agentId_timestamp", ["agentId", "timestamp"]),
+
+  duoSessions: defineTable({
+    userId: v.id("users"),
+    /** When the user last completed Duo auth manually (epoch ms). */
+    authenticatedAt: v.number(),
+    /** When the remembered-device session expires (epoch ms). */
+    validUntil: v.number(),
+    /** Session duration in ms (configurable per user). */
+    sessionDurationMs: v.number(),
+    /** Chrome profile directory used for this session. */
+    profileDirectory: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_validUntil", ["validUntil"]),
 });

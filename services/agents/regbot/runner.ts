@@ -2,20 +2,24 @@ import {
   appendLog,
   updateAgentById,
   createMonitor,
+  createPendingAction,
   listMonitorsByAgent,
   updateMonitorStatus,
 } from "../shared/runtimeAdapters.ts";
 import type { AgentRecord, RuntimeRunContext } from "../../../convex/types/contracts.ts";
-import { performDuoChallenge } from "./duoHandler.ts";
+import { performDuoChallenge, confirmDuoReauthentication } from "./duoHandler.ts";
+import { checkDuoSession } from "./duoSession.ts";
 import { checkSeatAvailability } from "./seatChecker.ts";
 import { DEFAULT_REG_DUO_RETRY_POLICY } from "../shared/retryPolicy.ts";
 
 export interface RegRunResult {
   [key: string]: unknown;
-  status: "completed" | "error" | "active";
+  status: "completed" | "error" | "active" | "waiting_for_duo";
   attempts: number;
   registeredUniqueId?: string;
   watchedUniqueIds: string[];
+  /** Set when status is "waiting_for_duo" — the pending action the user must resolve. */
+  pendingActionId?: string;
 }
 
 export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRunResult {
@@ -47,6 +51,61 @@ export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRu
       pollIntervalMinutes,
     });
   });
+
+  // ── Pre-flight: validate Duo remembered-device session ────────────────
+  const duoSessionCheck = checkDuoSession(agent.userId);
+  const hasAutoRegTargets = watchTargets.some((t) => t.autoRegister);
+
+  if (hasAutoRegTargets && !duoSessionCheck.isValid) {
+    appendLog({
+      agentId: agent.id,
+      event: "step",
+      scenarioId: context.scenarioId,
+      details: {
+        runId: context.runId,
+        message: duoSessionCheck.hasSession
+          ? "Duo remembered-device session expired — pausing for manual re-authentication"
+          : "No Duo session found — pausing for manual re-authentication",
+        remainingMs: duoSessionCheck.remainingMs,
+      },
+    });
+
+    // Create a pending action so the UI prompts the user to re-auth.
+    const pendingAction = createPendingAction({
+      userId: agent.userId,
+      agentId: agent.id,
+      type: "confirmation",
+      prompt:
+        "Your Duo session has expired. Please open Chrome, go to " +
+        "utdirect.utexas.edu, sign in with your UT EID (approve the Duo push " +
+        'and check "Remember me"), then come back here and confirm.',
+    });
+
+    updateAgentById(agent.id, {
+      status: "paused",
+      lastRunStatus: "running",
+      lastRunAt: new Date().toISOString(),
+    });
+
+    return {
+      status: "waiting_for_duo",
+      attempts: 0,
+      watchedUniqueIds: watchTargets.map((entry) => entry.uniqueId),
+      pendingActionId: pendingAction.id,
+    };
+  }
+
+  if (hasAutoRegTargets && duoSessionCheck.isValid) {
+    appendLog({
+      agentId: agent.id,
+      event: "step",
+      scenarioId: context.scenarioId,
+      details: {
+        runId: context.runId,
+        message: `Duo session valid (${Math.round(duoSessionCheck.remainingMs / 60_000)}min remaining)`,
+      },
+    });
+  }
 
   const maxPollAttempts = numberOrDefault(configObj.maxPollAttempts, 3);
 
@@ -97,7 +156,9 @@ export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRu
         const duo = performDuoChallenge(
           duoAttempt,
           {
+            userId: agent.userId,
             duoTimeoutAttempts: numberOrDefault(configObj.duoTimeoutAttempts, 0),
+            duoSessionDurationHours: numberOrDefault(configObj.duoSessionDurationHours, 24),
             forceFailure: Boolean(configObj.forceFailure),
           },
           DEFAULT_REG_DUO_RETRY_POLICY,
@@ -125,6 +186,7 @@ export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRu
               courseNumber: target.courseNumber,
               uniqueId: target.uniqueId,
               message: "RegBot completed registration",
+              duoMessage: duo.message,
             },
           });
 
@@ -133,6 +195,47 @@ export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRu
             attempts: pollAttempt,
             registeredUniqueId: target.uniqueId,
             watchedUniqueIds: watchTargets.map((entry) => entry.uniqueId),
+          };
+        }
+
+        // Duo session expired mid-run — pause for manual re-auth.
+        if (duo.requiresManualAuth) {
+          const pendingAction = createPendingAction({
+            userId: agent.userId,
+            agentId: agent.id,
+            type: "confirmation",
+            prompt:
+              `Duo session expired while trying to register for ${target.courseNumber} (${target.uniqueId}). ` +
+              "Please open Chrome, sign in at utdirect.utexas.edu with your UT EID " +
+              '(approve the Duo push and check "Remember me"), then confirm here to resume.',
+          });
+
+          updateAgentById(agent.id, {
+            status: "paused",
+            lastRunStatus: "running",
+            lastRunAt: new Date().toISOString(),
+          });
+
+          appendLog({
+            agentId: agent.id,
+            event: "step",
+            scenarioId: context.scenarioId,
+            details: {
+              runId: context.runId,
+              pollAttempt,
+              duoAttempt,
+              courseNumber: target.courseNumber,
+              uniqueId: target.uniqueId,
+              message: duo.message,
+              pendingActionId: pendingAction.id,
+            },
+          });
+
+          return {
+            status: "waiting_for_duo",
+            attempts: pollAttempt,
+            watchedUniqueIds: watchTargets.map((entry) => entry.uniqueId),
+            pendingActionId: pendingAction.id,
           };
         }
 
@@ -225,6 +328,15 @@ export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRu
     attempts: maxPollAttempts,
     watchedUniqueIds: watchTargets.map((entry) => entry.uniqueId),
   };
+}
+
+/**
+ * Call this when the user resolves a "waiting_for_duo" pending action
+ * to record their fresh Duo session before resuming the agent.
+ */
+export function handleDuoReauthConfirmation(agent: AgentRecord): void {
+  const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+  confirmDuoReauthentication(agent.userId, configObj);
 }
 
 interface WatchTarget {
