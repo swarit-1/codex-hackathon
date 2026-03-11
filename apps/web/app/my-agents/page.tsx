@@ -13,6 +13,8 @@ export default function MyAgentsPage() {
         <SectionHeading
           title="My Agents"
           description="Operate installed workflows, inspect what happened, and see where human input is still required."
+          actionHref="/marketplace"
+          actionLabel="Install from marketplace"
         />
       </section>
 
@@ -24,6 +26,8 @@ export default function MyAgentsPage() {
         <SectionHeading
           title="Recent run activity"
           description="Operational logs stay readable and evidence-focused rather than turning into dashboard filler."
+          actionHref="/settings"
+          actionLabel="Review notifications"
         />
         <EventList events={events} />
       </section>

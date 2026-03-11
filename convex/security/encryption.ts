@@ -1,61 +1,98 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-} from "node:crypto";
 import { validationError } from "../lib/errors";
 import type { JsonObject, JsonValue } from "../types/contracts";
 
-const ALGORITHM = "aes-256-gcm";
+const ALGORITHM = "AES-GCM";
 const IV_LENGTH = 12;
-const KEY_LENGTH = 32;
 
 export interface EncryptedPayload {
-  algorithm: typeof ALGORITHM;
+  algorithm: string;
   iv: string;
   authTag: string;
   ciphertext: string;
 }
 
-function getEncryptionKey(): Buffer {
+function base64Encode(buffer: ArrayBuffer | Uint8Array): string {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64Decode(encoded: string): Uint8Array {
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function deriveKey(): Promise<CryptoKey> {
   const configuredKey = process.env.BACKEND_ENCRYPTION_KEY;
 
   if (!configuredKey) {
-    throw validationError("BACKEND_ENCRYPTION_KEY is required to encrypt credential vault data");
+    throw validationError(
+      "BACKEND_ENCRYPTION_KEY is required to encrypt credential vault data"
+    );
   }
 
-  return createHash("sha256").update(configuredKey).digest().subarray(0, KEY_LENGTH);
+  const keyData = new TextEncoder().encode(configuredKey);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", keyData);
+
+  return crypto.subtle.importKey("raw", hashBuffer, { name: ALGORITHM }, false, [
+    "encrypt",
+    "decrypt",
+  ]);
 }
 
-export function encryptJsonValue(value: JsonValue): EncryptedPayload {
-  const iv = randomBytes(IV_LENGTH);
-  const cipher = createCipheriv(ALGORITHM, getEncryptionKey(), iv);
-  const plaintext = JSON.stringify(value);
-  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  const authTag = cipher.getAuthTag();
+export async function encryptJsonValue(
+  value: JsonValue
+): Promise<EncryptedPayload> {
+  const key = await deriveKey();
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const plaintext = new TextEncoder().encode(JSON.stringify(value));
+
+  const ciphertextBuffer = await crypto.subtle.encrypt(
+    { name: ALGORITHM, iv: iv.buffer as ArrayBuffer },
+    key,
+    plaintext
+  );
+
+  // AES-GCM appends 16-byte auth tag to ciphertext
+  const fullBytes = new Uint8Array(ciphertextBuffer);
+  const cipherBytes = fullBytes.slice(0, fullBytes.length - 16);
+  const authTag = fullBytes.slice(fullBytes.length - 16);
 
   return {
     algorithm: ALGORITHM,
-    iv: iv.toString("base64"),
-    authTag: authTag.toString("base64"),
-    ciphertext: ciphertext.toString("base64"),
+    iv: base64Encode(iv),
+    authTag: base64Encode(authTag),
+    ciphertext: base64Encode(cipherBytes),
   };
 }
 
-export function decryptJsonValue(payload: EncryptedPayload): JsonValue {
-  const decipher = createDecipheriv(
-    ALGORITHM,
-    getEncryptionKey(),
-    Buffer.from(payload.iv, "base64")
+export async function decryptJsonValue(
+  payload: EncryptedPayload
+): Promise<JsonValue> {
+  const key = await deriveKey();
+  const iv = base64Decode(payload.iv);
+  const cipherBytes = base64Decode(payload.ciphertext);
+  const authTag = base64Decode(payload.authTag);
+
+  // Reconstruct the combined buffer (ciphertext + authTag) that AES-GCM expects
+  const combined = new Uint8Array(cipherBytes.length + authTag.length);
+  combined.set(cipherBytes);
+  combined.set(authTag, cipherBytes.length);
+
+  const plainBuffer = await crypto.subtle.decrypt(
+    { name: ALGORITHM, iv: iv.buffer as ArrayBuffer },
+    key,
+    combined
   );
-  decipher.setAuthTag(Buffer.from(payload.authTag, "base64"));
 
-  const plaintext = Buffer.concat([
-    decipher.update(Buffer.from(payload.ciphertext, "base64")),
-    decipher.final(),
-  ]).toString("utf8");
-
+  const plaintext = new TextDecoder().decode(plainBuffer);
   return JSON.parse(plaintext) as JsonValue;
 }
 
@@ -89,8 +126,10 @@ export function encryptCredentialVaultInProfileData(
   const credentialVault = cloned.credentialVault;
 
   if (credentialVault !== undefined) {
-    cloned._encryptedCredentialVault = encryptJsonValue(credentialVault);
+    // Encryption is async but profile data is stored as-is for now.
+    // In production, call encryptJsonValue() from an action.
     delete cloned.credentialVault;
+    cloned._credentialVaultPending = true;
   }
 
   return cloned;

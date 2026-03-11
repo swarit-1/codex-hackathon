@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import { AppShell, FilterBar, MarketplaceCard, SectionHeading } from "../components/shared";
 import { useMarketplaceTemplates, useMarketplaceCategories } from "../lib/hooks";
 
@@ -8,6 +9,16 @@ export default function HomePage() {
   const { templates: featuredTemplates } = useMarketplaceTemplates("dev");
   const { templates: communityTemplates } = useMarketplaceTemplates("student");
   const categories = useMarketplaceCategories();
+  const [activeCategory, setActiveCategory] = useState("all");
+  const filteredCommunityTemplates = useMemo(
+    () =>
+      communityTemplates.filter((template) =>
+        activeCategory === "all"
+          ? true
+          : template.category.toLowerCase().replace(/\s+/g, "-") === activeCategory
+      ),
+    [activeCategory, communityTemplates]
+  );
 
   return (
     <AppShell currentPath="/">
@@ -60,12 +71,18 @@ export default function HomePage() {
           actionHref="/studio"
           actionLabel="Publish a workflow"
         />
-        <FilterBar options={categories} />
-        <div className="card-grid three-up">
-          {communityTemplates.map((template) => (
-            <MarketplaceCard key={template.id} template={template} />
-          ))}
-        </div>
+        <FilterBar activeValue={activeCategory} onChange={setActiveCategory} options={categories} />
+        {filteredCommunityTemplates.length > 0 ? (
+          <div className="card-grid three-up">
+            {filteredCommunityTemplates.map((template) => (
+              <MarketplaceCard key={template.id} template={template} />
+            ))}
+          </div>
+        ) : (
+          <p className="empty-state">
+            No student-built workflows match this category yet.
+          </p>
+        )}
       </section>
     </AppShell>
   );
