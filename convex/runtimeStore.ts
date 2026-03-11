@@ -1,56 +1,21 @@
 import type {
   AgentLogRecord,
   AgentRecord,
-<<<<<<< HEAD
-=======
+  LabOpeningRecord,
   MarketplaceTemplateRecord,
->>>>>>> origin/main
   PendingActionRecord,
   RegistrationMonitorRecord,
   ScholarshipRecord,
   ScheduledTaskRecord,
-<<<<<<< HEAD
-=======
   TemplateSubmissionRecord,
->>>>>>> origin/main
 } from "./types/contracts.ts";
-
-interface RuntimeMarketplaceTemplate {
-  id: string;
-  title: string;
-  description: string;
-  source: "dev" | "student";
-  visibility: "public" | "private";
-  category: string;
-  installCount: number;
-  templateConfig: Record<string, unknown>;
-  agentType: "scholar" | "reg" | "custom";
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface RuntimeTemplateSubmission {
-  id: string;
-  userId: string;
-  templateId?: string;
-  status: string;
-  draftPayload?: Record<string, unknown>;
-  reviewerId?: string;
-  reviewNotes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface RuntimeStore {
   agents: Map<string, AgentRecord>;
-<<<<<<< HEAD
-  marketplaceTemplates: Map<string, RuntimeMarketplaceTemplate>;
-  templateSubmissions: Map<string, RuntimeTemplateSubmission>;
-=======
   marketplaceTemplates: Map<string, MarketplaceTemplateRecord>;
   templateSubmissions: Map<string, TemplateSubmissionRecord>;
->>>>>>> origin/main
   scholarships: Map<string, ScholarshipRecord>;
+  labOpenings: Map<string, LabOpeningRecord>;
   registrationMonitors: Map<string, RegistrationMonitorRecord>;
   pendingActions: Map<string, PendingActionRecord>;
   agentLogs: Map<string, AgentLogRecord>;
@@ -61,6 +26,7 @@ interface RuntimeStore {
 export const DEFAULT_USER_ID = "user_demo";
 export const SCHOLARBOT_TEMPLATE_ID = "tpl_dev_scholarbot";
 export const REGBOT_TEMPLATE_ID = "tpl_dev_regbot";
+export const EUREKABOT_TEMPLATE_ID = "tpl_dev_eurekabot";
 export const STUDENT_TEMPLATE_ID = "tpl_student_custom";
 
 const store: RuntimeStore = {
@@ -68,6 +34,7 @@ const store: RuntimeStore = {
   marketplaceTemplates: new Map(),
   templateSubmissions: new Map(),
   scholarships: new Map(),
+  labOpenings: new Map(),
   registrationMonitors: new Map(),
   pendingActions: new Map(),
   agentLogs: new Map(),
@@ -80,12 +47,8 @@ function nowIso(): string {
 }
 
 function seedTemplates(): void {
-  const ts = nowIso();
-<<<<<<< HEAD
-  const baseTemplates: RuntimeMarketplaceTemplate[] = [
-=======
-  const baseTemplates: Record<string, unknown>[] = [
->>>>>>> origin/main
+  const ts = Date.now();
+  const baseTemplates: MarketplaceTemplateRecord[] = [
     {
       id: SCHOLARBOT_TEMPLATE_ID,
       title: "ScholarBot",
@@ -95,14 +58,36 @@ function seedTemplates(): void {
       category: "scholarships",
       installCount: 0,
       templateConfig: {
-        sources: ["UT Scholarships", "FastWeb"],
-        requireEssay: true,
-        profile: {
-          major: "CS",
-          classification: "Undergraduate",
+        schemaVersion: "v1",
+        inputSchema: {
+          fields: [
+            { key: "sources", label: "Scholarship Sources", type: "multiselect" },
+            { key: "profile", label: "Student Profile", type: "object" },
+          ],
+        },
+        defaultConfig: {
+          sources: ["UT Scholarships", "FastWeb"],
+          requireEssay: true,
+          profile: {
+            major: "CS",
+            classification: "Undergraduate",
+          },
+        },
+        currentConfig: {
+          sources: ["UT Scholarships", "FastWeb"],
+          requireEssay: true,
+          profile: {
+            major: "CS",
+            classification: "Undergraduate",
+          },
+        },
+        defaultSchedule: {
+          enabled: true,
+          cron: "0 8 * * *",
+          timezone: "America/Chicago",
         },
       },
-      agentType: "scholar",
+      templateType: "scholar",
       createdAt: ts,
       updatedAt: ts,
     },
@@ -115,14 +100,103 @@ function seedTemplates(): void {
       category: "registration",
       installCount: 0,
       templateConfig: {
-        semester: "Fall 2026",
-        courseNumber: "CS 378",
-        uniqueId: "12345",
-        pollIntervalMinutes: 10,
-        seatAvailableOnAttempt: 1,
-        duoTimeoutAttempts: 0,
+        schemaVersion: "v1",
+        inputSchema: {
+          fields: [
+            { key: "semester", label: "Semester", type: "text" },
+            { key: "watchList", label: "Watched Sections", type: "array" },
+            { key: "autoRegister", label: "Auto-register", type: "boolean" },
+          ],
+        },
+        defaultConfig: {
+          semester: "Fall 2026",
+          autoRegister: true,
+          pollIntervalMinutes: 10,
+          duoTimeoutAttempts: 0,
+          watchList: [
+            {
+              courseNumber: "CS 378",
+              uniqueId: "12345",
+              semester: "Fall 2026",
+              autoRegister: true,
+              seatAvailableOnAttempt: 1,
+            },
+          ],
+        },
+        currentConfig: {
+          semester: "Fall 2026",
+          autoRegister: true,
+          pollIntervalMinutes: 10,
+          duoTimeoutAttempts: 0,
+          watchList: [
+            {
+              courseNumber: "CS 378",
+              uniqueId: "12345",
+              semester: "Fall 2026",
+              autoRegister: true,
+              seatAvailableOnAttempt: 1,
+            },
+          ],
+        },
+        defaultSchedule: {
+          enabled: true,
+          cron: "*/10 * * * *",
+          timezone: "America/Chicago",
+          jitterMinutes: 2,
+        },
       },
-      agentType: "reg",
+      templateType: "reg",
+      createdAt: ts,
+      updatedAt: ts,
+    },
+    {
+      id: EUREKABOT_TEMPLATE_ID,
+      title: "EurekaBot",
+      description: "Scan UT Eureka for research lab openings, match to your profile, and draft outreach emails to professors.",
+      source: "dev",
+      visibility: "public",
+      category: "research",
+      installCount: 0,
+      templateConfig: {
+        schemaVersion: "v1",
+        inputSchema: {
+          fields: [
+            { key: "sources", label: "Lab Listing Sources", type: "multiselect" },
+            { key: "profile", label: "Student Profile", type: "object" },
+          ],
+        },
+        defaultConfig: {
+          sources: ["Eureka", "UT Research Portal"],
+          profile: {
+            name: "UT Student",
+            major: "Computer Science",
+            classification: "Undergraduate",
+            gpa: "3.8",
+            researchInterests: ["machine learning", "systems"],
+            relevantCourses: ["CS 429 Computer Organization", "CS 439 Operating Systems", "CS 378 Machine Learning"],
+            skills: ["Python", "PyTorch", "C++", "Linux"],
+          },
+        },
+        currentConfig: {
+          sources: ["Eureka", "UT Research Portal"],
+          profile: {
+            name: "UT Student",
+            major: "Computer Science",
+            classification: "Undergraduate",
+            gpa: "3.8",
+            researchInterests: ["machine learning", "systems"],
+            relevantCourses: ["CS 429 Computer Organization", "CS 439 Operating Systems", "CS 378 Machine Learning"],
+            skills: ["Python", "PyTorch", "C++", "Linux"],
+          },
+        },
+        defaultSchedule: {
+          enabled: true,
+          cron: "0 9 * * 1,3,5",
+          timezone: "America/Chicago",
+          jitterMinutes: 10,
+        },
+      },
+      templateType: "eureka",
       createdAt: ts,
       updatedAt: ts,
     },
@@ -135,16 +209,30 @@ function seedTemplates(): void {
       category: "custom",
       installCount: 0,
       templateConfig: {
-        dryRunOnly: true,
+        schemaVersion: "v1",
+        inputSchema: {
+          fields: [],
+        },
+        defaultConfig: {
+          dryRunOnly: true,
+        },
+        currentConfig: {
+          dryRunOnly: true,
+        },
+        defaultSchedule: {
+          enabled: false,
+          cron: "",
+          timezone: "America/Chicago",
+        },
       },
-      agentType: "custom",
+      templateType: "custom",
       createdAt: ts,
       updatedAt: ts,
     },
   ];
 
   for (const template of baseTemplates) {
-    store.marketplaceTemplates.set(template.id as string, template as unknown as MarketplaceTemplateRecord);
+    store.marketplaceTemplates.set(template.id, template);
   }
 }
 
@@ -153,6 +241,7 @@ export function resetRuntimeStore(): void {
   store.marketplaceTemplates.clear();
   store.templateSubmissions.clear();
   store.scholarships.clear();
+  store.labOpenings.clear();
   store.registrationMonitors.clear();
   store.pendingActions.clear();
   store.agentLogs.clear();

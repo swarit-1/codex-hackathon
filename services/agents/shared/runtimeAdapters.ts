@@ -7,6 +7,7 @@ import { getRuntimeStore, nextId } from "../../../convex/runtimeStore.ts";
 import type {
   AgentRecord,
   AgentLogRecord,
+  LabOpeningRecord,
   PendingActionRecord,
   ScholarshipRecord,
   RegistrationMonitorRecord,
@@ -146,6 +147,66 @@ export function updateMonitorStatus(id: string, status: RegistrationMonitorRecor
   if (!monitor) return;
   monitor.status = status;
   monitor.updatedAt = Date.now();
+}
+
+// ── Lab Openings ─────────────────────────────────────────────────────────────
+
+export function listLabOpeningsByAgent(agentId: string): LabOpeningRecord[] {
+  const results: LabOpeningRecord[] = [];
+  for (const l of getRuntimeStore().labOpenings.values()) {
+    if (l.agentId === agentId) results.push(l);
+  }
+  return results;
+}
+
+export function upsertLabOpeningFromRun(entry: {
+  userId: string;
+  agentId: string;
+  labName: string;
+  professorName: string;
+  professorEmail: string;
+  department: string;
+  researchArea: string;
+  source: string;
+  postedDate?: number;
+  deadline?: number;
+  requirements?: string;
+  matchScore?: number;
+  status: LabOpeningRecord["status"];
+  emailDraft?: string;
+  emailSentAt?: number;
+}): LabOpeningRecord {
+  // Find existing by agentId + labName
+  for (const l of getRuntimeStore().labOpenings.values()) {
+    if (l.agentId === entry.agentId && l.labName === entry.labName) {
+      Object.assign(l, entry, { updatedAt: Date.now() });
+      return l;
+    }
+  }
+  const id = nextId("lab");
+  const now = Date.now();
+  const record: LabOpeningRecord = {
+    id,
+    userId: entry.userId,
+    agentId: entry.agentId,
+    labName: entry.labName,
+    professorName: entry.professorName,
+    professorEmail: entry.professorEmail,
+    department: entry.department,
+    researchArea: entry.researchArea,
+    source: entry.source,
+    postedDate: entry.postedDate,
+    deadline: entry.deadline,
+    requirements: entry.requirements,
+    matchScore: entry.matchScore,
+    status: entry.status,
+    emailDraft: entry.emailDraft,
+    emailSentAt: entry.emailSentAt,
+    createdAt: now,
+    updatedAt: now,
+  };
+  getRuntimeStore().labOpenings.set(id, record);
+  return record;
 }
 
 // ── Agent Logs ───────────────────────────────────────────────────────────────
