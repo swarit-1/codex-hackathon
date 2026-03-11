@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell, FilterBar, MarketplaceCard, SectionHeading } from "../components/shared";
-import { useMarketplaceTemplates, useMarketplaceCategories } from "../lib/hooks";
+import { useMarketplaceTemplates, useMarketplaceCategories, useRequireCurrentUser } from "../lib/hooks";
 
 export default function HomePage() {
+  useRequireCurrentUser();
   const { templates: featuredTemplates } = useMarketplaceTemplates("dev");
   const { templates: communityTemplates } = useMarketplaceTemplates("student");
   const categories = useMarketplaceCategories();

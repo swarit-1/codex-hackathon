@@ -46,6 +46,12 @@ import type {
 export const listTemplates = query({
   args: marketplaceTemplateFilterArgs,
   handler: async (ctx, args) => {
+    // Authz check BEFORE data access to prevent unauthorized reads
+    if (args.ownerUserId) {
+      const actingUserId = await resolveActingUserId(ctx, args.ownerUserId);
+      await assertUserOwnsResource(ctx, actingUserId, args.ownerUserId);
+    }
+
     let templates = args.ownerUserId
       ? await queryByIndex<Omit<MarketplaceTemplateRecord, "id">>(
           ctx,
@@ -66,11 +72,6 @@ export const listTemplates = query({
             "by_source_visibility",
             [["source", args.source], ["visibility", args.visibility ?? "public"]]
           );
-
-    if (args.ownerUserId) {
-      const actingUserId = await resolveActingUserId(ctx, args.ownerUserId);
-      await assertUserOwnsResource(ctx, actingUserId, args.ownerUserId);
-    }
 
     const filteredTemplates = templates
       .map((doc) => toMarketplaceTemplateRecord(doc as any))

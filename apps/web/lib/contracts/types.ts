@@ -1,3 +1,8 @@
+import type {
+  FlowforgeWorkflowSpecResult,
+  UserProfileRecord,
+} from "@convex/types/contracts";
+
 export type AgentStatus = "active" | "paused" | "completed" | "error";
 export type ScholarshipStatus = "found" | "applying" | "paused" | "submitted" | "expired";
 export type MonitorStatus = "watching" | "registered" | "failed";
@@ -197,6 +202,10 @@ export type MarketplaceTemplate = {
   scheduleDefault: string;
   setupFields: string[];
   outcomes: string[];
+  templateConfig: ConfigEnvelope;
+  ownerUserId?: string;
+  approvedAt?: number;
+  archivedAt?: number;
 };
 
 export type Agent = {
@@ -210,6 +219,7 @@ export type Agent = {
   nextRunLabel: string;
   pendingActionLabel: string;
   scheduleLabel: string;
+  lastRunStatus?: AgentRunStatus;
 };
 
 export type AgentEvent = {
@@ -226,6 +236,11 @@ export type StudioDraft = {
   title: string;
   state: string;
   summary: string;
+  prompt: string;
+  agentId?: string;
+  generatedScript?: string;
+  specResult?: FlowforgeWorkflowSpecResult;
+  draftPayload?: TemplateDraftPayload;
 };
 
 export type SettingsSection = {
@@ -237,3 +252,15 @@ export type FilterOption = {
   label: string;
   value: string;
 };
+
+export type ProfileFormValues = {
+  name: string;
+  email: string;
+  eid: string;
+  major: string;
+  classification: string;
+  scholarshipInterests: string;
+  notifications: string;
+};
+
+export type CurrentUserProfile = UserProfileRecord;
