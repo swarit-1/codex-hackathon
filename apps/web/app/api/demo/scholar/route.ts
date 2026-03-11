@@ -20,6 +20,7 @@ Step-by-step instructions:
 3. If you are redirected to a UT EID login page (login.utexas.edu or similar):
    - Enter the UT EID: rv25852
    - Enter the password: Tac0bellisgood$
+
    - Click the login/sign-in button.
    - Handle any Duo or MFA prompts if they appear (e.g. click "Send Me a Push"
      or approve via the Duo app — wait for it to complete).
