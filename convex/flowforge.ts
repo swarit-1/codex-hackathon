@@ -1,7 +1,7 @@
 import { action } from "./_generated/server";
 import {
   buildAgentScriptResult,
-  buildWorkflowSpecResult,
+  buildWorkflowSpecResultWithOpenAI,
 } from "./lib/flowforge";
 import { validationError } from "./lib/errors";
 import {
@@ -21,7 +21,7 @@ export const generateWorkflowSpec = action({
       throw validationError("nlDescription is required");
     }
 
-    return buildWorkflowSpecResult(args.nlDescription);
+    return buildWorkflowSpecResultWithOpenAI(args.nlDescription);
   },
 });
 

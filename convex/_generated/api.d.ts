@@ -33,6 +33,7 @@ import type * as lib_orchestrator from "../lib/orchestrator.js";
 import type * as lib_pagination from "../lib/pagination.js";
 import type * as lib_records from "../lib/records.js";
 import type * as lib_runControl from "../lib/runControl.js";
+import type * as lib_runtimePrompt from "../lib/runtimePrompt.js";
 import type * as lib_stubResponses from "../lib/stubResponses.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as marketplace from "../marketplace.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   "lib/pagination": typeof lib_pagination;
   "lib/records": typeof lib_records;
   "lib/runControl": typeof lib_runControl;
+  "lib/runtimePrompt": typeof lib_runtimePrompt;
   "lib/stubResponses": typeof lib_stubResponses;
   "lib/validators": typeof lib_validators;
   marketplace: typeof marketplace;
