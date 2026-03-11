@@ -207,6 +207,9 @@ export type MarketplaceTemplate = {
   ownerUserId?: string;
   approvedAt?: number;
   archivedAt?: number;
+  imageSrc: string;
+  iconKey: string;
+  iconGlyph: string;
 };
 
 export type Agent = {
