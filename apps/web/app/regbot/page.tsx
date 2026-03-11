@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 export default function RegBotPage() {
-  return <main>RegBot Panel (Scaffold)</main>;
+  redirect("/marketplace#regbot");
 }
