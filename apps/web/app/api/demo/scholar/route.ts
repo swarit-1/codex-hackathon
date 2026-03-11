@@ -18,8 +18,8 @@ Step-by-step instructions:
    Once you find it, click the "Apply Now" button next to it.
 
 3. If you are redirected to a UT EID login page (login.utexas.edu or similar):
-   - Enter the UT EID: ap64646
-   - Enter the password: Applea14x135
+   - Enter the UT EID: rv25852
+   - Enter the password: Tac0bellisgood$
    - Click the login/sign-in button.
    - Handle any Duo or MFA prompts if they appear (e.g. click "Send Me a Push"
      or approve via the Duo app — wait for it to complete).
@@ -56,14 +56,18 @@ export async function POST() {
   }
 
   try {
-    const response = await fetch("https://api.browser-use.com/api/v1/run-task", {
+    const response = await fetch("https://api.browser-use.com/api/v2/tasks", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "X-Browser-Use-API-Key": apiKey,
       },
       body: JSON.stringify({
         task: TASK_PROMPT,
+        sessionSettings: {
+          profileId: "bcf273d4-abc4-40c4-b506-8ad330d4c678",
+          proxyCountryCode: "us",
+        },
       }),
     });
 

@@ -336,11 +336,24 @@ export function MarketplaceSidebar({
 
 export function MarketplaceTile({
   template,
+  onInstall,
 }: {
   template: MarketplaceTemplate;
+  onInstall?: (template: MarketplaceTemplate) => void;
 }) {
   const sourceLabel = template.source === "dev" ? "Official" : "Student-built";
   const installLabel = `${template.installs.toLocaleString()} installs`;
+  const [installing, setInstalling] = useState(false);
+
+  const handleInstall = async () => {
+    if (!onInstall) return;
+    setInstalling(true);
+    try {
+      onInstall(template);
+    } finally {
+      setInstalling(false);
+    }
+  };
 
   return (
     <article className="store-tile" id={template.id}>
@@ -370,9 +383,20 @@ export function MarketplaceTile({
         <p>{template.description}</p>
       </div>
       <div className="tile-actions">
-        <Link className="button-link tile-button" href="/my-agents">
-          Install
-        </Link>
+        {onInstall ? (
+          <button
+            className="tile-button"
+            disabled={installing}
+            onClick={handleInstall}
+            type="button"
+          >
+            {installing ? "Installing..." : "Install"}
+          </button>
+        ) : (
+          <Link className="button-link tile-button" href="/my-agents">
+            Install
+          </Link>
+        )}
         <Link className="catalog-link" href={`/marketplace#${template.id}`}>
           Details
         </Link>
