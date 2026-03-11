@@ -1,7 +1,7 @@
 {
   "/my-agents/page": "app/my-agents/page.js",
   "/page": "app/page.js",
+  "/api/demo/scholar/route": "app/api/demo/scholar/route.js",
   "/marketplace/page": "app/marketplace/page.js",
-  "/studio/page": "app/studio/page.js",
-  "/settings/page": "app/settings/page.js"
+  "/studio/page": "app/studio/page.js"
 }
