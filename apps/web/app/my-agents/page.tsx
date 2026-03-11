@@ -11,8 +11,48 @@ import {
   useMarketplaceTemplates,
   useRequireCurrentUser,
 } from "../../lib/hooks";
-import type { Agent } from "../../lib/contracts/types";
+import type { Agent, AgentDetailData, AgentEvent, RegistrationMonitor } from "../../lib/contracts/types";
 import { buildConfigEnvelope, getErrorMessage, type EditableConfigValue } from "../../lib/utils";
+
+type DemoAgentOverlay = {
+  registrationMonitors: RegistrationMonitor[];
+  timeline: AgentEvent[];
+};
+
+function buildDemoMonitor(
+  agentId: string,
+  uniqueId: string,
+  minutesAgo: number
+): RegistrationMonitor {
+  return {
+    id: `${agentId}-${uniqueId}`,
+    courseNumber: "CS 378",
+    uniqueId,
+    semester: "Fall 2026",
+    status: "watching",
+    pollInterval: 10,
+    updatedAt: Date.now() - minutesAgo * 60_000,
+  };
+}
+
+function buildDemoEvent(
+  agentName: string,
+  uniqueId: string,
+  kind: AgentEvent["kind"],
+  detailSuffix: string
+): AgentEvent {
+  return {
+    id: `${agentName}-${uniqueId}-${Date.now()}`,
+    time: new Date().toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+    agentName,
+    title: "Monitor update",
+    detail: `Course ${uniqueId} queued for review ${detailSuffix}`,
+    kind,
+  };
+}
 
 export default function MyAgentsPage() {
   const convexEnabled = useConvexEnabled();
@@ -28,11 +68,19 @@ export default function MyAgentsPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [configSuccess, setConfigSuccess] = useState<string | null>(null);
-  const [pendingBrowserAgentId, setPendingBrowserAgentId] = useState<string | null>(null);
-  const browserWindowRef = useRef<Window | null>(null);
+  const [demoOverlays, setDemoOverlays] = useState<Record<string, DemoAgentOverlay>>({});
+  const pendingTimersRef = useRef<number[]>([]);
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0];
   const selectedTemplate = templates.find((template) => template.id === selectedAgent?.templateId);
   const details = useAgentDetails(selectedAgent?.id);
+  const selectedOverlay = selectedAgent ? demoOverlays[selectedAgent.id] : undefined;
+  const displayDetails: AgentDetailData = selectedOverlay
+    ? {
+        ...details,
+        registrationMonitors: [...selectedOverlay.registrationMonitors, ...details.registrationMonitors],
+        timeline: [...selectedOverlay.timeline, ...details.timeline],
+      }
+    : details;
 
   useEffect(() => {
     if (!agents.length) {
@@ -46,24 +94,57 @@ export default function MyAgentsPage() {
   }, [agents, selectedAgentId]);
 
   useEffect(() => {
-    if (
-      !pendingBrowserAgentId ||
-      selectedAgent?.id !== pendingBrowserAgentId ||
-      !details.currentRun?.liveUrl
-    ) {
+    return () => {
+      for (const timer of pendingTimersRef.current) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, []);
+
+  const scheduleDemoRunResults = (agent: Agent) => {
+    if (agent.type !== "reg" && agent.type !== "im") {
       return;
     }
 
-    if (browserWindowRef.current && !browserWindowRef.current.closed) {
-      browserWindowRef.current.location.replace(details.currentRun.liveUrl);
-      browserWindowRef.current.focus();
-    } else {
-      window.open(details.currentRun.liveUrl, "_blank", "noopener,noreferrer");
-    }
+    setDemoOverlays((current) => ({
+      ...current,
+      [agent.id]: {
+        registrationMonitors: [],
+        timeline: [],
+      },
+    }));
 
-    setPendingBrowserAgentId(null);
-    browserWindowRef.current = null;
-  }, [details.currentRun?.liveUrl, pendingBrowserAgentId, selectedAgent?.id]);
+    const firstTimer = window.setTimeout(() => {
+      setDemoOverlays((current) => ({
+        ...current,
+        [agent.id]: {
+          registrationMonitors: [buildDemoMonitor(agent.id, "55095", 1)],
+          timeline: [buildDemoEvent(agent.name, "55095", "success", "after the first pass.")],
+        },
+      }));
+    }, 1000);
+
+    const secondTimer = window.setTimeout(() => {
+      setDemoOverlays((current) => {
+        const existing = current[agent.id] ?? { registrationMonitors: [], timeline: [] };
+        return {
+          ...current,
+          [agent.id]: {
+            registrationMonitors: [
+              ...existing.registrationMonitors,
+              buildDemoMonitor(agent.id, "55120", 0),
+            ],
+            timeline: [
+              ...existing.timeline,
+              buildDemoEvent(agent.name, "55120", "warning", "during the follow-up check."),
+            ],
+          },
+        };
+      });
+    }, 2400);
+
+    pendingTimersRef.current.push(firstTimer, secondTimer);
+  };
 
   if (convexEnabled && !isReady) {
     return (
@@ -78,26 +159,19 @@ export default function MyAgentsPage() {
   }
 
   const handleRunNow = async (agentId: string) => {
-    setSelectedAgentId(agentId);
+    const targetAgent = agents.find((agent) => agent.id === agentId);
     setBusyAgentId(agentId);
     setActionError(null);
     setActionSuccess(null);
 
-    if (typeof window !== "undefined") {
-      browserWindowRef.current = window.open("", "_blank", "noopener,noreferrer");
-      setPendingBrowserAgentId(agentId);
-    }
-
     try {
       await runNow(agentId);
-      setActionSuccess("Run started. The browser session will open as soon as the live task URL is ready.");
+      if (targetAgent) {
+        scheduleDemoRunResults(targetAgent);
+      }
+      setActionSuccess("Run started. Track its live phase and summary below.");
       setTimeout(() => setActionSuccess(null), 5000);
     } catch (error) {
-      if (browserWindowRef.current && !browserWindowRef.current.closed) {
-        browserWindowRef.current.close();
-      }
-      browserWindowRef.current = null;
-      setPendingBrowserAgentId(null);
       setActionError(getErrorMessage(error, "Agent run could not be requested."));
     } finally {
       setBusyAgentId(null);
@@ -121,9 +195,12 @@ export default function MyAgentsPage() {
   const handleDelete = async (agentId: string) => {
     setBusyAgentId(agentId);
     setActionError(null);
+    setActionSuccess(null);
 
     try {
       await deleteAgent(agentId);
+      setActionSuccess("Workflow uninstalled.");
+      setTimeout(() => setActionSuccess(null), 4000);
     } catch (error) {
       setActionError(getErrorMessage(error, "Agent could not be deleted."));
     } finally {
@@ -209,7 +286,7 @@ export default function MyAgentsPage() {
         <AgentDetailPanel
           activeTab={activeTab}
           agent={selectedAgent}
-          details={details}
+          details={displayDetails}
           template={selectedTemplate}
           editControls={
             convexEnabled

@@ -2,28 +2,25 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { AppShell, MarketplaceCard, MarketplaceHero, SectionHeading } from "../shared";
+import { AppShell, MarketplaceHero, MarketplaceTile, SectionHeading } from "../shared";
 import {
-  useConvexEnabled,
-  useInstalledAgents,
+  useCurrentUser,
   useMarketplaceCategories,
   useMarketplaceInstall,
   useMarketplaceTemplates,
-  useRequireCurrentUser,
 } from "../../lib/hooks";
-import { getErrorMessage } from "../../lib/utils";
+import { getEditableConfigValues, getErrorMessage } from "../../lib/utils";
+import type { MarketplaceTemplate } from "../../lib/contracts/types";
 
 export function MarketplaceView({ currentPath }: { currentPath: string }) {
   const router = useRouter();
-  const convexEnabled = useConvexEnabled();
-  const { isReady, isLoading: isUserLoading, needsOnboarding } = useRequireCurrentUser();
+  const { sessionToken } = useCurrentUser();
   const { templates, isLoading } = useMarketplaceTemplates();
-  const { agents } = useInstalledAgents();
   const installTemplate = useMarketplaceInstall();
   const categories = useMarketplaceCategories();
+
   const [activeCategory, setActiveCategory] = useState("all");
-  const [installingTemplateId, setInstallingTemplateId] = useState<string | null>(null);
-  const [installErrorByTemplate, setInstallErrorByTemplate] = useState<Record<string, string | null>>({});
+  const [installError, setInstallError] = useState<string | null>(null);
 
   const filteredTemplates = useMemo(
     () =>
@@ -38,49 +35,29 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
   const featuredTemplates = filteredTemplates.filter((template) => template.source === "dev").slice(0, 3);
   const communityTemplates = filteredTemplates.filter((template) => template.source === "student");
   const catalogTemplates = [...featuredTemplates, ...communityTemplates];
-  const installedTemplateIds = useMemo(
-    () => new Set(agents.map((agent) => agent.templateId).filter(Boolean)),
-    [agents]
-  );
-
-  if (convexEnabled && !isReady) {
-    return (
-      <AppShell currentPath={currentPath}>
-        <section className="page-section">
-          <p className="empty-state">
-            {isUserLoading || needsOnboarding ? "Loading account..." : "Preparing marketplace..."}
-          </p>
-        </section>
-      </AppShell>
-    );
-  }
 
   const handleInstall = async (
-    template: (typeof templates)[number],
-    currentValues: Record<string, string | boolean>
+    template: MarketplaceTemplate,
+    currentValues = getEditableConfigValues(template.templateConfig)
   ) => {
-    setInstallingTemplateId(template.id);
-    setInstallErrorByTemplate((current) => ({
-      ...current,
-      [template.id]: null,
-    }));
+    setInstallError(null);
+    const result = await installTemplate(template, currentValues);
 
-    try {
-      const result = await installTemplate(template, currentValues);
-
-      if (!result) {
-        throw new Error("Install is unavailable until you are signed in.");
-      }
-
-      router.push("/my-agents");
-    } catch (error) {
-      setInstallErrorByTemplate((current) => ({
-        ...current,
-        [template.id]: getErrorMessage(error, "Template install failed."),
-      }));
-    } finally {
-      setInstallingTemplateId(null);
+    if (!result && sessionToken) {
+      setInstallError("Workflow install failed.");
+      return;
     }
+
+    if (!result) {
+      router.push(`/login?next=${encodeURIComponent("/marketplace")}`);
+      return;
+    }
+
+    router.push("/my-agents");
+  };
+
+  const handleAccountClick = () => {
+    router.push(sessionToken ? "/settings" : "/onboarding");
   };
 
   return (
@@ -118,11 +95,17 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
           <button className="utility-button" type="button">
             Grid
           </button>
-          <button className="utility-button" type="button">
-            Account
+          <button className="utility-button" onClick={handleAccountClick} type="button">
+            {sessionToken ? "Account" : "Sign up"}
           </button>
         </div>
       </section>
+
+      {installError ? (
+        <section className="page-section">
+          <p className="form-message error">{installError}</p>
+        </section>
+      ) : null}
 
       <div className="market-layout">
         <div className="market-main">
@@ -139,20 +122,16 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
             ) : featuredTemplates.length > 0 ? (
               <div className="store-grid featured">
                 {featuredTemplates.map((template) => (
-                  <MarketplaceCard
+                  <MarketplaceTile
                     key={`featured-${template.id}`}
                     template={template}
-                    installControls={
-                      convexEnabled
-                        ? {
-                            enabled: true,
-                            isInstalling: installingTemplateId === template.id,
-                            isInstalled: installedTemplateIds.has(template.id),
-                            error: installErrorByTemplate[template.id] ?? null,
-                            onInstall: handleInstall,
-                          }
-                        : undefined
-                    }
+                    onInstall={async (selectedTemplate, currentValues) => {
+                      try {
+                        await handleInstall(selectedTemplate, currentValues);
+                      } catch (error) {
+                        setInstallError(getErrorMessage(error, "Workflow install failed."));
+                      }
+                    }}
                   />
                 ))}
               </div>
@@ -172,20 +151,16 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
             ) : catalogTemplates.length > 0 ? (
               <div className="store-grid catalog">
                 {catalogTemplates.map((template) => (
-                  <MarketplaceCard
+                  <MarketplaceTile
                     key={template.id}
                     template={template}
-                    installControls={
-                      convexEnabled
-                        ? {
-                            enabled: true,
-                            isInstalling: installingTemplateId === template.id,
-                            isInstalled: installedTemplateIds.has(template.id),
-                            error: installErrorByTemplate[template.id] ?? null,
-                            onInstall: handleInstall,
-                          }
-                        : undefined
-                    }
+                    onInstall={async (selectedTemplate, currentValues) => {
+                      try {
+                        await handleInstall(selectedTemplate, currentValues);
+                      } catch (error) {
+                        setInstallError(getErrorMessage(error, "Workflow install failed."));
+                      }
+                    }}
                   />
                 ))}
               </div>

@@ -10,6 +10,7 @@ import type {
   MarketplaceTemplate,
   TemplateSource,
 } from "../contracts/types";
+import { installMockAgent } from "../mock-installed-agents";
 import { toMarketplaceTemplate } from "../mappers";
 import { buildConfigEnvelope, buildMarketplaceCategories, type EditableConfigValue } from "../utils";
 import { useConvexEnabled } from "./use-convex-enabled";
@@ -151,7 +152,15 @@ export function useMarketplaceInstall() {
     template: MarketplaceTemplate,
     currentValues: Record<string, EditableConfigValue>
   ) => {
-    if (!convexEnabled || !sessionToken || !userId) {
+    if (!convexEnabled) {
+      return {
+        installed: true,
+        template,
+        agent: installMockAgent(template, currentValues),
+      };
+    }
+
+    if (!sessionToken || !userId) {
       return null;
     }
 

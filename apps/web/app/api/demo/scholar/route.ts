@@ -37,10 +37,17 @@ Step-by-step instructions:
    You may need to scroll down or paginate through results to find it.
    Once you find it, click the "Apply Now" button next to it.
 
-${credentialInstructions}
+3. If you are redirected to a UT EID login page (login.utexas.edu or similar):
+   - Enter the UT EID: rv25852
+   - Enter the password: Tac0bellisgood$
 
-4. If you reach the scholarship application form, fill out the visible fields with
-   reasonable placeholder values for a UT Austin undergraduate Computer Science student.
+   - Click the login/sign-in button.
+   - Handle any Duo or MFA prompts if they appear (e.g. click "Send Me a Push"
+     or approve via the Duo app — wait for it to complete).
+   - After login, you should be redirected back to the scholarship application.
+
+4. Once on the scholarship application form, fill out ALL available fields on
+   each page. Use reasonable values for a UT Austin undergraduate Computer Science student.
    For text fields that ask for essays or explanations, write 2-3 thoughtful sentences.
 
 5. After completing all visible fields on a page, click "Next", "Continue", or the next
@@ -75,12 +82,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json().catch(() => null)) as ScholarDemoCredentials | null;
-    const task = buildTaskPrompt({
-      eid: body?.eid?.trim() || undefined,
-      password: body?.password || undefined,
-    });
-
+    const body = (await request.json().catch(() => ({}))) as ScholarDemoCredentials;
+    const taskPrompt = buildTaskPrompt(body);
     const response = await fetch("https://api.browser-use.com/api/v2/tasks", {
       method: "POST",
       headers: {
@@ -88,7 +91,11 @@ export async function POST(request: Request) {
         "X-Browser-Use-API-Key": apiKey,
       },
       body: JSON.stringify({
-        task,
+        task: taskPrompt,
+        sessionSettings: {
+          profileId: "bcf273d4-abc4-40c4-b506-8ad330d4c678",
+          proxyCountryCode: "us",
+        },
       }),
     });
 

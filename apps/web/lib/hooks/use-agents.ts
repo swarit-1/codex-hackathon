@@ -3,7 +3,7 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { agentEvents as mockEvents, installedAgents as mockAgents } from "../contracts/mock-data";
 import type {
   Agent,
@@ -12,6 +12,11 @@ import type {
   AgentStatus,
   ConfigEnvelope,
 } from "../contracts/types";
+import {
+  deleteMockAgent,
+  readMockInstalledAgents,
+  subscribeToMockInstalledAgents,
+} from "../mock-installed-agents";
 import {
   toAgentEvent,
   toAgentRunUI,
@@ -28,6 +33,7 @@ export function useInstalledAgents(): {
   isLoading: boolean;
 } {
   const convexEnabled = useConvexEnabled();
+  const [localAgents, setLocalAgents] = useState<Agent[]>(mockAgents);
   const { sessionToken, userId } = useCurrentUser();
   const agentsResult = useQuery(
     api.agents.listByUser,
@@ -75,9 +81,20 @@ export function useInstalledAgents(): {
       : "skip"
   );
 
+  useEffect(() => {
+    if (convexEnabled) {
+      return;
+    }
+
+    setLocalAgents(readMockInstalledAgents());
+    return subscribeToMockInstalledAgents(() => {
+      setLocalAgents(readMockInstalledAgents());
+    });
+  }, [convexEnabled]);
+
   const agents = useMemo(() => {
     if (!convexEnabled) {
-      return mockAgents;
+      return localAgents;
     }
 
     const templatesById = new Map(
@@ -111,6 +128,7 @@ export function useInstalledAgents(): {
     agentsResult?.items,
     convexEnabled,
     devTemplates?.items,
+    localAgents,
     latestRuns,
     pendingActionsResult?.items,
     studentTemplates?.items,
@@ -356,7 +374,12 @@ export function useAgentActions() {
       });
     },
     deleteAgent: async (agentId: string) => {
-      if (!convexEnabled || !sessionToken) {
+      if (!convexEnabled) {
+        deleteMockAgent(agentId);
+        return { deletedAgentId: agentId };
+      }
+
+      if (!sessionToken) {
         return null;
       }
 

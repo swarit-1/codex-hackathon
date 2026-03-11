@@ -12,9 +12,12 @@ Step-by-step instructions:
 1. Navigate to ${EUREKA_URL}. Wait for the page to fully load.
 
 2. If you are redirected to a UT EID login page (login.utexas.edu or similar):
-   - Do NOT attempt to guess, fabricate, or reuse any credentials.
-   - Stop at the login page and report that authenticated access is required
-     to continue the scan.
+   - Enter the UT EID: rv25852
+   - Enter the password: Tac0bellisgood$
+
+   - Click the login/sign-in button.
+   - Handle any Duo or MFA prompts if they appear.
+   - After login, you should be redirected back to Eureka.
 
 3. Once on the Eureka opportunities page, look for filters or search options:
    - If there is a department filter, select "Computer Science" or "UTCS".

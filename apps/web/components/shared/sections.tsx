@@ -172,11 +172,41 @@ export function MarketplaceSidebar({
 
 export function MarketplaceTile({
   template,
+  onInstall,
 }: {
   template: MarketplaceTemplate;
+  onInstall?: (
+    template: MarketplaceTemplate,
+    currentValues: Record<string, EditableConfigValue>
+  ) => Promise<void> | void;
 }) {
   const sourceLabel = template.source === "dev" ? "Official" : "Student-built";
   const installLabel = `${template.installs.toLocaleString()} installs`;
+  const { supportedFields, unsupportedFields } = useMemo(
+    () => extractConfigFields(template.templateConfig.inputSchema),
+    [template.templateConfig.inputSchema]
+  );
+  const [isInstallOpen, setIsInstallOpen] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [currentValues, setCurrentValues] = useState<Record<string, EditableConfigValue>>(
+    () => getEditableConfigValues(template.templateConfig)
+  );
+
+  useEffect(() => {
+    setCurrentValues(getEditableConfigValues(template.templateConfig));
+  }, [template.id, template.templateConfig]);
+
+  const handleInstall = async () => {
+    if (!onInstall) return;
+    setInstalling(true);
+    try {
+      await onInstall(template, currentValues);
+      setIsInstallOpen(false);
+    } finally {
+      setInstalling(false);
+    }
+  };
+
 
   return (
     <article className="store-tile" id={template.id}>
@@ -206,13 +236,158 @@ export function MarketplaceTile({
         <p>{template.description}</p>
       </div>
       <div className="tile-actions">
-        <Link className="button-link tile-button" href="/my-agents">
-          Install
-        </Link>
+        {onInstall ? (
+          <>
+            <button
+              className="tile-button"
+              disabled={installing}
+              onClick={() => setIsInstallOpen((current) => !current)}
+              type="button"
+            >
+              {isInstallOpen ? "Hide setup" : "Install"}
+            </button>
+            {isInstallOpen ? (
+              <button
+                className="secondary tile-button"
+                disabled={installing}
+                onClick={handleInstall}
+                type="button"
+              >
+                {installing ? "Installing..." : "Save"}
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <Link className="button-link tile-button" href="/my-agents">
+            Install
+          </Link>
+        )}
+
         <Link className="catalog-link" href={`/marketplace#${template.id}`}>
           Details
         </Link>
       </div>
+
+      {onInstall && isInstallOpen ? (
+        <form
+          className="inline-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            await handleInstall();
+          }}
+        >
+          {supportedFields.length > 0 ? (
+            <div className="field-grid">
+              {supportedFields.map((field) => {
+                const value = currentValues[field.key];
+
+                if (field.type === "textarea") {
+                  return (
+                    <label
+                      key={field.key}
+                      className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                    >
+                      <span>{field.label}</span>
+                      <textarea
+                        onChange={(event) =>
+                          setCurrentValues((previousValues) => ({
+                            ...previousValues,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                        required={field.required}
+                        rows={4}
+                        value={String(value ?? "")}
+                      />
+                      {field.description ? <small className="field-hint">{field.description}</small> : null}
+                    </label>
+                  );
+                }
+
+                if (field.type === "select") {
+                  return (
+                    <label
+                      key={field.key}
+                      className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                    >
+                      <span>{field.label}</span>
+                      <select
+                        onChange={(event) =>
+                          setCurrentValues((previousValues) => ({
+                            ...previousValues,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                        required={field.required}
+                        value={String(value ?? "")}
+                      >
+                        <option value="">Select an option</option>
+                        {(field.options ?? []).map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      {field.description ? <small className="field-hint">{field.description}</small> : null}
+                    </label>
+                  );
+                }
+
+                if (field.type === "boolean" || field.type === "checkbox") {
+                  return (
+                    <label key={field.key} className="checkbox-field">
+                      <input
+                        checked={Boolean(value)}
+                        onChange={(event) =>
+                          setCurrentValues((previousValues) => ({
+                            ...previousValues,
+                            [field.key]: event.target.checked,
+                          }))
+                        }
+                        type="checkbox"
+                      />
+                      <span>{field.label}</span>
+                    </label>
+                  );
+                }
+
+                return (
+                  <label
+                    key={field.key}
+                    className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                  >
+                    <span>{field.label}</span>
+                    <input
+                      onChange={(event) =>
+                        setCurrentValues((previousValues) => ({
+                          ...previousValues,
+                          [field.key]: event.target.value,
+                        }))
+                      }
+                      required={field.required}
+                      type={
+                        field.type === "email" || field.type === "url" || field.type === "password"
+                          ? field.type
+                          : "text"
+                      }
+                      value={String(value ?? "")}
+                    />
+                    {field.description ? <small className="field-hint">{field.description}</small> : null}
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="form-note">This workflow can be installed with its default settings.</p>
+          )}
+
+          {unsupportedFields.length > 0 ? (
+            <p className="form-note">
+              Some advanced setup fields are not editable yet and will keep their default values.
+            </p>
+          ) : null}
+        </form>
+      ) : null}
     </article>
   );
 }
@@ -385,7 +560,7 @@ export function AgentTable({
                       onClick={() => actionControls.onDelete?.(agent.id)}
                       type="button"
                     >
-                      Delete
+                      Uninstall
                     </button>
                   </>
                 ) : null}
@@ -475,7 +650,10 @@ export function AgentDetailPanel({
   }
 
   const currentRun = details.currentRun ?? agent.currentRun;
-  const debugLink = currentRun?.liveUrl ?? null;
+  const debugLink =
+    currentRun?.liveUrl && !currentRun.liveUrl.includes("cloud.browser-use.com/tasks/")
+      ? currentRun.liveUrl
+      : null;
 
   if (details.isLoading) {
     return (
@@ -683,15 +861,15 @@ export function AgentDetailPanel({
               </div>
               <div>
                 <dt>Last update</dt>
-                <dd>{currentRun?.updatedLabel ?? "Not available"}</dd>
+                <dd className="detail-value-update">{currentRun?.updatedLabel ?? "Not available"}</dd>
               </div>
               <div>
                 <dt>Status</dt>
-                <dd>{currentRun?.statusLabel ?? "Idle"}</dd>
+                <dd className="detail-value-status">{currentRun?.statusLabel ?? "Idle"}</dd>
               </div>
               <div>
                 <dt>Phase</dt>
-                <dd>{currentRun?.phaseLabel ?? "Idle"}</dd>
+                <dd className="detail-value-phase">{currentRun?.phaseLabel ?? "Idle"}</dd>
               </div>
             </dl>
             {currentRun?.errorCategory ? (
@@ -702,7 +880,7 @@ export function AgentDetailPanel({
             ) : null}
           {debugLink ? (
             <a className="text-action" href={debugLink} rel="noreferrer" target="_blank">
-              Open live browser
+              Open provider debug link
             </a>
           ) : null}
         </article>

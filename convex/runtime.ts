@@ -29,251 +29,64 @@ const BROWSER_USE_API_URL = "https://api.browser-use.com/api/v2";
 
 type RuntimeProcessingResult = {
   summary?: string;
-  resultCounts?: JsonObject;
+  resultCounts?: Record<string, number>;
 };
 
-function getCurrentConfig(config: ConfigEnvelope): JsonObject {
-  return (config.currentConfig ?? config.defaultConfig) as JsonObject;
-}
-
-function phaseLabel(phase: AgentRunPhase): string {
-  return phase.replace(/_/g, " ");
-}
-
-function trackingStatusToAgentRunStatus(
-  status: AgentRunTrackingStatus
-): AgentRecord["lastRunStatus"] {
-  switch (status) {
-    case "succeeded":
-      return "succeeded";
-    case "failed":
-      return "failed";
-    case "cancelled":
-      return "cancelled";
-    default:
-      return "running";
-  }
-}
-
-function categorizeRuntimeError(message?: string): AgentRunErrorCategory | undefined {
-  if (!message) {
-    return undefined;
-  }
-
-  const normalized = message.toLowerCase();
-
-  if (
-    normalized.includes("browser_use_api_key") ||
-    normalized.includes("not configured") ||
-    normalized.includes("missing")
-  ) {
-    return "configuration";
-  }
-
-  if (
-    normalized.includes("auth") ||
-    normalized.includes("login") ||
-    normalized.includes("password") ||
-    normalized.includes("credential") ||
-    normalized.includes("duo") ||
-    normalized.includes("sign in")
-  ) {
-    return "authentication";
-  }
-
-  if (
-    normalized.includes("404") ||
-    normalized.includes("selector") ||
-    normalized.includes("layout") ||
-    normalized.includes("page changed") ||
-    normalized.includes("not found")
-  ) {
-    return "site_changed";
-  }
-
-  if (normalized.includes("timeout") || normalized.includes("timed out")) {
-    return "timeout";
-  }
-
-  if (
-    normalized.includes("browser use api error") ||
-    normalized.includes("poll error") ||
-    normalized.includes("provider")
-  ) {
-    return "provider_error";
-  }
-
-  return "unknown";
-}
-
-function inferRunPhase(snapshot: { output?: string; steps?: unknown[] }): AgentRunPhase {
-  const stepText = Array.isArray(snapshot.steps) ? JSON.stringify(snapshot.steps).toLowerCase() : "";
-  const outputText = (snapshot.output ?? "").toLowerCase();
-  const haystack = `${stepText} ${outputText}`;
-
-  if (
-    haystack.includes("duo") ||
-    haystack.includes("login") ||
-    haystack.includes("sign in") ||
-    haystack.includes("password") ||
-    haystack.includes("authenticat")
-  ) {
-    return "authenticating";
-  }
-
-  if (haystack.includes("extract") || haystack.includes("json") || haystack.includes("summary")) {
-    return "extracting";
-  }
-
-  if (haystack.includes("navigate") || haystack.includes("page") || haystack.includes("open url")) {
-    return "navigating";
-  }
-
-  return "scanning";
-}
-
-function inferTrackingStatus(browserStatus: string): AgentRunTrackingStatus {
-  const normalized = browserStatus.toLowerCase();
-
-  if (
-    normalized.includes("waiting") ||
-    normalized.includes("paused") ||
-    normalized.includes("input") ||
-    normalized.includes("blocked")
-  ) {
-    return "waiting_for_input";
-  }
-
-  if (normalized.includes("launch") || normalized.includes("queue") || normalized.includes("pending")) {
-    return "launching";
-  }
-
-  return "running";
-}
-
-function buildRunTransitionEvent(
-  status: AgentRunTrackingStatus,
-  phase: AgentRunPhase
-): { event: string; title: string } {
-  if (status === "queued") {
-    return {
-      event: "agent.run.queued",
-      title: "Run queued",
-    };
-  }
-
-  if (status === "launching") {
-    return {
-      event: "agent.runtime.starting_browser",
-      title: "Launching browser",
-    };
-  }
-
-  if (status === "waiting_for_input") {
-    return {
-      event: "agent.runtime.waiting_for_input",
-      title: "Waiting on you",
-    };
-  }
-
-  if (status === "succeeded") {
-    return {
-      event: "agent.runtime.completed",
-      title: "Run completed",
-    };
-  }
-
-  if (status === "failed") {
-    return {
-      event: "agent.runtime.failed",
-      title: "Run failed",
-    };
-  }
-
-  if (status === "cancelled") {
-    return {
-      event: "agent.runtime.cancelled",
-      title: "Run cancelled",
-    };
-  }
-
-  return {
-    event: `agent.runtime.${phase}`,
-    title: phaseLabel(phase).replace(/^\w/, (character) => character.toUpperCase()),
-  };
-}
-
-function normalizeStringList(value: unknown, fallback: string[] = []): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
-      .filter(Boolean);
-  }
-
-  if (typeof value === "string") {
-    return value
-      .split(/\r?\n|,/)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-
-  return fallback;
-}
-
-async function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): Promise<string> {
-  const runtimeConfig = await hydrateRuntimeConfig(config);
-  const currentConfig = getCurrentConfig(runtimeConfig);
+function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): string {
+  const currentConfig = (config.currentConfig ?? config.defaultConfig) as JsonObject;
   const targetUrl = (currentConfig.targetUrl as string) ?? "";
 
   switch (agentType) {
     case "scholar": {
-      const sources = normalizeStringList(currentConfig.sources, ["UT Scholarships"]);
-      const major =
-        (currentConfig.major as string) ??
-        ((currentConfig.profile as JsonObject | undefined)?.major as string) ??
-        "Computer Science";
-      const classification =
-        (currentConfig.classification as string) ??
-        ((currentConfig.profile as JsonObject | undefined)?.classification as string) ??
-        "Undergraduate";
-      const essayNotes = (currentConfig.essayNotes as string) ?? "";
+      const major = ((currentConfig.profile as JsonObject)?.major as string) ?? "Computer Science";
+      const startUrl = targetUrl || "https://utexas.scholarships.ngwebsolutions.com/Scholarships/Search";
+      return `You are a browser automation agent helping a UT Austin student apply to a scholarship.
 
-      return `You are a scholarship discovery agent for a UT Austin ${classification} ${major} student.
+GOAL: Navigate to the scholarship search page, find the "CREEES McWilliams Scholarship", \
+click its "Apply Now" button, and then fill out the entire scholarship application \
+form across all pages — but DO NOT submit at the end.
 
-GOAL: Navigate to the scholarship search page and find relevant scholarships.
+Step-by-step instructions:
 
-1. Navigate to ${targetUrl || "https://utexas.scholarships.ngwebsolutions.com/ScholarX_StudentLanding.aspx"}.
-2. Search through available scholarships.
-3. Focus on scholarships that plausibly fit the student profile and are still open or upcoming.
-4. For each scholarship found, capture: title, source, deadline, eligibility requirements, fit score from 0 to 1, and any missing materials.
-5. Do not submit or finalize any applications.
+1. You should already be on ${startUrl}. Wait for the page to fully load.
 
-Student notes:
-- Sources to check: ${sources.join(", ")}
-${essayNotes ? `- Resume and essay notes: ${essayNotes}` : "- Resume and essay notes: none provided"}
+2. Look through the list of scholarships on the page for "CREEES McWilliams Scholarship". \
+   You may need to scroll down or paginate through results to find it. \
+   Once you find it, click the "Apply Now" button next to it.
 
-Return the final result as JSON only inside a \`\`\`json code block using this shape:
-{
-  "scholarships": [
-    {
-      "title": "string",
-      "source": "string",
-      "deadline": "YYYY-MM-DD or null",
-      "eligibility": "string",
-      "matchScore": 0.0,
-      "status": "found",
-      "missingFields": ["string"]
-    }
-  ],
-  "summary": "string"
-}`;
+3. If you are redirected to a UT EID login page (login.utexas.edu or similar):
+   - Enter the UT EID and password if credentials are provided.
+   - Click the login/sign-in button.
+   - Handle any Duo or MFA prompts if they appear (e.g. click "Send Me a Push" \
+     or approve via the Duo app — wait for it to complete).
+   - After login, you should be redirected back to the scholarship application.
+
+4. Once on the scholarship application form, fill out ALL available fields on \
+   each page. Use reasonable values for a UT Austin undergraduate ${major} student. \
+   For text fields that ask for essays or explanations, write 2-3 thoughtful sentences.
+
+5. After completing all fields on a page, click "Next", "Continue", or the next \
+   step/page button to proceed.
+
+6. Continue filling out ALL pages of the application.
+
+7. On the FINAL page/step, STOP. Do NOT click "Submit", "Finish", or any button \
+   that would finalize/submit the application.
+
+8. Report back what fields you found on each page and what values you entered.
+
+CRITICAL RULES:
+- DO NOT click any Submit or Finish button that would finalize the application.
+- Fill out EVERY field on EVERY page before moving to the next page.
+- If a dropdown does not have an exact match, pick the closest available option.
+- Take your time and be thorough — fill ALL fields before proceeding.`;
     }
 
     case "reg": {
       const eidLogin = (currentConfig.eidLogin as string) ?? "";
       const eidPassword = (currentConfig.eidPassword as string) ?? "";
       const conflictPolicy = (currentConfig.conflictPolicy as string) ?? "";
-      const courseTargets = getRegistrationTargets(runtimeConfig);
+      const courseTargets = getRegistrationTargets(config);
       const courseTargetLines =
         courseTargets.length > 0
           ? courseTargets
@@ -372,38 +185,25 @@ Return the final result as JSON only inside a \`\`\`json code block using this s
   }
 }
 
+// Browser profile with saved cookies/auth for UT Austin sites
+const BROWSER_USE_PROFILE_ID = "bcf273d4-abc4-40c4-b506-8ad330d4c678";
+
 async function callBrowserUseAPI(
   apiKey: string,
   taskPrompt: string
 ): Promise<{ taskId: string; liveUrl: string }> {
-  const session = await createBrowserUseSession(apiKey);
-  const taskResponse = await createBrowserUseTask(apiKey, taskPrompt, session.id);
-  const taskData = await taskResponse.json();
-  const taskId = taskData.id ?? taskData.task_id ?? "";
-
-  if (!taskId) {
-    throw new Error("Browser Use API returned no task id.");
-  }
-
-  return {
-    taskId,
-    liveUrl: session.liveUrl,
-  };
-}
-
-async function createBrowserUseSession(
-  apiKey: string
-): Promise<{ id: string; liveUrl: string }> {
-  const response = await fetch(`${BROWSER_USE_API_URL}/sessions`, {
+  const response = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Browser-Use-API-Key": apiKey,
     },
     body: JSON.stringify({
-      keepAlive: true,
-      persistMemory: true,
-      enableRecording: false,
+      task: taskPrompt,
+      sessionSettings: {
+        profileId: BROWSER_USE_PROFILE_ID,
+        proxyCountryCode: "us",
+      },
     }),
   });
 
@@ -413,62 +213,21 @@ async function createBrowserUseSession(
   }
 
   const data = await response.json();
-  const sessionId = data.id ?? data.session_id ?? "";
-  const liveUrl = data.liveUrl ?? data.live_url ?? "";
+  const taskId = data.id ?? data.task_id ?? "";
+  const liveUrl =
+    data.liveUrl ??
+    data.live_url ??
+    data.publicShareUrl ??
+    `https://cloud.browser-use.com/tasks/${taskId}`;
 
-  if (!sessionId || typeof liveUrl !== "string" || liveUrl.length === 0) {
+  if (!taskId || typeof liveUrl !== "string" || liveUrl.length === 0) {
     throw new Error("Browser Use session API returned no usable liveUrl.");
   }
 
   return {
-    id: sessionId,
+    taskId,
     liveUrl,
   };
-}
-
-async function createBrowserUseTask(
-  apiKey: string,
-  taskPrompt: string,
-  sessionId: string
-): Promise<Response> {
-  const primaryResponse = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Browser-Use-API-Key": apiKey,
-    },
-    body: JSON.stringify({
-      task: taskPrompt,
-      sessionId,
-    }),
-  });
-
-  if (primaryResponse.ok) {
-    return primaryResponse;
-  }
-
-  if (primaryResponse.status !== 422) {
-    const errorText = await primaryResponse.text();
-    throw new Error(`Browser Use task API error (${primaryResponse.status}): ${errorText}`);
-  }
-
-  const fallbackResponse = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Browser-Use-API-Key": apiKey,
-    },
-    body: JSON.stringify({
-      task: taskPrompt,
-    }),
-  });
-
-  if (!fallbackResponse.ok) {
-    const errorText = await fallbackResponse.text();
-    throw new Error(`Browser Use task API error (${fallbackResponse.status}): ${errorText}`);
-  }
-
-  return fallbackResponse;
 }
 
 async function pollBrowserUseTask(
@@ -598,6 +357,149 @@ function normalizeStringArray(value: unknown): string[] {
     .split(/\r?\n|,/)
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function normalizeStringList(value: unknown, fallback: string[]): string[] {
+  const normalized = normalizeStringArray(value);
+  return normalized.length > 0 ? normalized : fallback;
+}
+
+function getCurrentConfig(config: ConfigEnvelope): JsonObject {
+  return (config.currentConfig ?? config.defaultConfig ?? {}) as JsonObject;
+}
+
+function trackingStatusToAgentRunStatus(status: AgentRunTrackingStatus) {
+  switch (status) {
+    case "succeeded":
+      return "succeeded";
+    case "failed":
+      return "failed";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return "running";
+  }
+}
+
+function buildRunTransitionEvent(status: AgentRunTrackingStatus, phase: AgentRunPhase) {
+  if (status === "failed") {
+    return { event: "agent.runtime.failed", title: "Run failed" };
+  }
+
+  if (status === "succeeded") {
+    return { event: "agent.runtime.completed", title: "Run completed" };
+  }
+
+  if (status === "waiting_for_input") {
+    return { event: "agent.runtime.waiting_for_input", title: "Waiting for input" };
+  }
+
+  if (status === "launching" || phase === "starting_browser") {
+    return { event: "agent.runtime.starting_browser", title: "Launching browser" };
+  }
+
+  return { event: "agent.runtime.updated", title: "Run updated" };
+}
+
+function phaseLabel(phase: AgentRunPhase): string {
+  switch (phase) {
+    case "starting_browser":
+      return "Launching browser";
+    case "writing_results":
+      return "Writing results";
+    default:
+      return phase.replace(/_/g, " ");
+  }
+}
+
+function categorizeRuntimeError(message: string): AgentRunErrorCategory {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("api key") || normalized.includes("not configured")) {
+    return "configuration";
+  }
+
+  if (normalized.includes("login") || normalized.includes("auth") || normalized.includes("duo")) {
+    return "authentication";
+  }
+
+  if (normalized.includes("timeout")) {
+    return "timeout";
+  }
+
+  if (normalized.includes("provider") || normalized.includes("browser use api")) {
+    return "provider_error";
+  }
+
+  if (normalized.includes("site") || normalized.includes("selector") || normalized.includes("404")) {
+    return "site_changed";
+  }
+
+  return "unknown";
+}
+
+function inferTrackingStatus(status: string): AgentRunTrackingStatus {
+  const normalized = status.toLowerCase();
+
+  if (normalized.includes("wait")) {
+    return "waiting_for_input";
+  }
+
+  if (normalized.includes("run") || normalized.includes("progress") || normalized.includes("navigat")) {
+    return "running";
+  }
+
+  if (normalized.includes("launch") || normalized.includes("queue")) {
+    return "launching";
+  }
+
+  if (normalized.includes("cancel")) {
+    return "cancelled";
+  }
+
+  if (normalized.includes("fail") || normalized.includes("error")) {
+    return "failed";
+  }
+
+  if (normalized.includes("complete") || normalized.includes("finish") || normalized.includes("done")) {
+    return "succeeded";
+  }
+
+  return "running";
+}
+
+function inferRunPhase(result: { status: string; output?: string; steps?: unknown[] }): AgentRunPhase {
+  if (result.output) {
+    return "extracting";
+  }
+
+  const normalized = result.status.toLowerCase();
+
+  if (normalized.includes("auth")) {
+    return "authenticating";
+  }
+
+  if (normalized.includes("scan")) {
+    return "scanning";
+  }
+
+  if (normalized.includes("extract")) {
+    return "extracting";
+  }
+
+  if (normalized.includes("write")) {
+    return "writing_results";
+  }
+
+  if (normalized.includes("complete") || normalized.includes("finish") || normalized.includes("done")) {
+    return "completed";
+  }
+
+  if (normalized.includes("fail") || normalized.includes("error")) {
+    return "failed";
+  }
+
+  return Array.isArray(result.steps) && result.steps.length > 0 ? "scanning" : "navigating";
 }
 
 async function ensurePendingAction(

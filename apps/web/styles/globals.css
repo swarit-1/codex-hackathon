@@ -726,6 +726,18 @@ textarea,
   font-weight: 600;
 }
 
+.detail-value-update {
+  color: #8a4a00;
+}
+
+.detail-value-status {
+  color: var(--success);
+}
+
+.detail-value-phase {
+  color: #7a2f00;
+}
+
 .metric-chip-row {
   display: flex;
   flex-wrap: wrap;
