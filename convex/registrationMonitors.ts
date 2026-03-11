@@ -5,6 +5,7 @@ import { paginateItems } from "./lib/pagination";
 import { toAgentRecord, toRegistrationMonitorRecord } from "./lib/records";
 import {
   registrationMonitorCreateArgs,
+  registrationMonitorListByAgentArgs,
   registrationMonitorListArgs,
 } from "./lib/validators";
 import {
@@ -111,5 +112,35 @@ export const listByUser = query({
       .sort((left, right) => right.updatedAt - left.updatedAt);
 
     return paginateItems(filtered, args);
+  },
+});
+
+export const listByAgent = query({
+  args: registrationMonitorListByAgentArgs,
+  handler: async (ctx, args) => {
+    const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
+
+    if (!agentDoc) {
+      throw notFoundError("agent not found", {
+        agentId: args.agentId,
+      });
+    }
+
+    const agent = toAgentRecord(agentDoc as any);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId, args.sessionToken);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
+
+    const monitors = await queryByIndex<Omit<RegistrationMonitorRecord, "id">>(
+      ctx,
+      "registrationMonitors",
+      "by_agentId",
+      [["agentId", args.agentId]]
+    );
+
+    const sorted = monitors
+      .map((monitor) => toRegistrationMonitorRecord(monitor as any))
+      .sort((left, right) => right.updatedAt - left.updatedAt);
+
+    return paginateItems(sorted, args);
   },
 });

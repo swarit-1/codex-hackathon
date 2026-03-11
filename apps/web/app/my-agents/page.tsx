@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { AgentTable, AppShell, EventList, SectionHeading } from "../../components/shared";
+import { useEffect, useState } from "react";
+import { AgentDetailPanel, AgentTable, AppShell, EventList, SectionHeading } from "../../components/shared";
 import {
   useAgentActions,
+  useAgentDetails,
   useAgentEvents,
   useConvexEnabled,
   useInstalledAgents,
@@ -18,9 +19,24 @@ export default function MyAgentsPage() {
   const { agents } = useInstalledAgents();
   const { events } = useAgentEvents();
   const { runNow, updateStatus, deleteAgent } = useAgentActions();
+  const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<"progress" | "results" | "history">("progress");
   const [busyAgentId, setBusyAgentId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0];
+  const details = useAgentDetails(selectedAgent?.id);
+
+  useEffect(() => {
+    if (!agents.length) {
+      setSelectedAgentId(undefined);
+      return;
+    }
+
+    if (!selectedAgentId || !agents.some((agent) => agent.id === selectedAgentId)) {
+      setSelectedAgentId(agents[0].id);
+    }
+  }, [agents, selectedAgentId]);
 
   if (convexEnabled && !isReady) {
     return (
@@ -41,7 +57,7 @@ export default function MyAgentsPage() {
 
     try {
       await runNow(agentId);
-      setActionSuccess("Agent launched! Check the activity feed below for updates.");
+      setActionSuccess("Run started. Track its live phase and summary below.");
       setTimeout(() => setActionSuccess(null), 5000);
     } catch (error) {
       setActionError(getErrorMessage(error, "Agent run could not be requested."));
@@ -116,13 +132,31 @@ export default function MyAgentsPage() {
               : undefined
           }
           agents={agents}
+          onSelectAgent={(agent) => {
+            setSelectedAgentId(agent.id);
+            setActiveTab("progress");
+          }}
+          selectedAgentId={selectedAgent?.id}
         />
       </section>
 
       <section className="page-section">
         <SectionHeading
-          title="Recent run activity"
-          description="Operational logs stay readable and evidence-focused rather than turning into dashboard filler."
+          title="Agent Detail"
+          description="Progress is tracked in-app. Each run shows its current phase, results, and history without depending on the provider cloud page."
+        />
+        <AgentDetailPanel
+          activeTab={activeTab}
+          agent={selectedAgent}
+          details={details}
+          onTabChange={setActiveTab}
+        />
+      </section>
+
+      <section className="page-section">
+        <SectionHeading
+          title="Low-level activity"
+          description="This is the raw operational trail across agents. Use it for diagnostics after you review the run-centric detail view."
           actionHref="/settings"
           actionLabel="Review notifications"
         />

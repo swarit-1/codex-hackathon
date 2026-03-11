@@ -36,11 +36,13 @@ export const append = mutation({
 
     return appendAgentLog(ctx, {
       agentId: args.agentId,
+      runId: args.runId,
       event: args.event,
       level: args.level,
       details: args.details,
       screenshots: args.screenshots,
       scenarioId: args.scenarioId,
+      phase: args.phase,
     });
   },
 });
@@ -72,6 +74,7 @@ export const list = query({
 
     const sortedLogs = logs
       .map((log) => toAgentLogRecord(log as any))
+      .filter((log) => !args.runId || log.runId === String(args.runId))
       .sort((left, right) => right.timestamp - left.timestamp);
 
     return paginateItems(sortedLogs, args);

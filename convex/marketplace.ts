@@ -179,6 +179,36 @@ export const installTemplate = mutation({
       updatedAt: timestamp,
     });
 
+    if (template.templateType === "reg") {
+      const currentConfig = (config.currentConfig ?? config.defaultConfig) as Record<string, unknown>;
+      const courseNumber =
+        typeof currentConfig.courseNumber === "string" ? currentConfig.courseNumber.trim() : "";
+      const uniqueId =
+        typeof currentConfig.uniqueId === "string" ? currentConfig.uniqueId.trim() : "";
+      const semester =
+        typeof currentConfig.semester === "string" ? currentConfig.semester.trim() : "";
+      const pollIntervalMinutes =
+        typeof currentConfig.pollIntervalMinutes === "number"
+          ? currentConfig.pollIntervalMinutes
+          : typeof currentConfig.pollIntervalMinutes === "string"
+            ? Number(currentConfig.pollIntervalMinutes)
+            : 10;
+
+      if (courseNumber && uniqueId && semester) {
+        await insertDoc(ctx, "registrationMonitors", {
+          userId: args.userId,
+          agentId,
+          courseNumber,
+          uniqueId,
+          semester,
+          status: "watching",
+          pollInterval: Number.isFinite(pollIntervalMinutes) ? Math.max(1, pollIntervalMinutes) : 10,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        });
+      }
+    }
+
     await patchDoc(ctx, args.templateId, {
       installCount: template.installCount + 1,
       updatedAt: timestamp,

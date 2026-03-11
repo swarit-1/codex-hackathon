@@ -14,6 +14,31 @@ export type TemplateVisibility = "private" | "public";
 export type AgentOwnerType = "first_party" | "student" | "generated";
 export type AgentType = "scholar" | "reg" | "eureka" | "custom"| "im";
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
+export type AgentRunTrackingStatus =
+  | "queued"
+  | "launching"
+  | "running"
+  | "waiting_for_input"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+export type AgentRunPhase =
+  | "queued"
+  | "starting_browser"
+  | "navigating"
+  | "authenticating"
+  | "scanning"
+  | "extracting"
+  | "writing_results"
+  | "completed"
+  | "failed";
+export type AgentRunErrorCategory =
+  | "configuration"
+  | "authentication"
+  | "site_changed"
+  | "provider_error"
+  | "timeout"
+  | "unknown";
 export type AuthMethod = "email" | "ut_sso" | "demo";
 export type LogLevel = "info" | "warning" | "error";
 export type RuntimeRunType = "manual" | "scheduled" | "resume";
@@ -137,6 +162,24 @@ export interface AgentRecord {
   updatedAt: number;
 }
 
+export interface AgentRunRecord {
+  id: string;
+  userId: string;
+  agentId: string;
+  triggerType: RuntimeRunType;
+  status: AgentRunTrackingStatus;
+  phase: AgentRunPhase;
+  startedAt: number;
+  updatedAt: number;
+  endedAt?: number;
+  browserUseTaskId?: string;
+  liveUrl?: string;
+  summary?: string;
+  resultCounts?: JsonObject;
+  error?: string;
+  errorCategory?: AgentRunErrorCategory;
+}
+
 export interface TemplateInstallResult {
   agent: AgentRecord;
   template: MarketplaceTemplateRecord;
@@ -219,13 +262,38 @@ export type Agent = {
   name: string;
   templateId: string;
   source: TemplateSource;
-  type: "scholar" | "reg" | "eureka" | "custom";
+  type: "scholar" | "reg" | "eureka" | "custom" | "im";
   status: AgentStatus;
+  pendingActionCount: number;
+  currentRun?: AgentRun;
+  latestSummary: string;
+  nextStepLabel: string;
   lastRunLabel: string;
   nextRunLabel: string;
   pendingActionLabel: string;
   scheduleLabel: string;
   lastRunStatus?: AgentRunStatus;
+};
+
+export type AgentRun = {
+  id: string;
+  triggerType: RuntimeRunType;
+  status: AgentRunTrackingStatus;
+  phase: AgentRunPhase;
+  statusLabel: string;
+  phaseLabel: string;
+  startedAt: number;
+  updatedAt: number;
+  endedAt?: number;
+  updatedLabel: string;
+  startedLabel: string;
+  endedLabel?: string;
+  summary?: string;
+  resultCounts?: Record<string, number>;
+  liveUrl?: string;
+  browserUseTaskId?: string;
+  error?: string;
+  errorCategory?: AgentRunErrorCategory;
 };
 
 export type AgentEvent = {
@@ -252,6 +320,46 @@ export type LabOpening = {
   status: LabOpeningStatus;
   emailDraft?: string;
   emailSentAt?: number;
+};
+
+export type RegistrationMonitor = {
+  id: string;
+  courseNumber: string;
+  uniqueId: string;
+  semester: string;
+  status: MonitorStatus;
+  pollInterval: number;
+  updatedAt?: number;
+};
+
+export type ScholarshipMatch = {
+  id: string;
+  title: string;
+  source: string;
+  deadline?: number;
+  matchScore?: number;
+  status: ScholarshipStatus;
+  missingFields?: string[];
+  updatedAt: number;
+};
+
+export type PendingAction = {
+  id: string;
+  type: PendingActionType;
+  prompt: string;
+  createdAt: number;
+  resolvedAt?: number;
+};
+
+export type AgentDetailData = {
+  currentRun?: AgentRun;
+  runs: AgentRun[];
+  timeline: AgentEvent[];
+  scholarships: ScholarshipMatch[];
+  registrationMonitors: RegistrationMonitor[];
+  labOpenings: LabOpening[];
+  pendingActions: PendingAction[];
+  isLoading: boolean;
 };
 
 export type StudioDraft = {

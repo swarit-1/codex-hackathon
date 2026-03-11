@@ -23,6 +23,7 @@ import {
   buildAgentOperationEvent,
   buildRuntimeHandoffPayload,
 } from "./lib/runControl";
+import { createAgentRun } from "./lib/agentRuns";
 import {
   agentCreateArgs,
   agentDeleteArgs,
@@ -232,8 +233,18 @@ export const runNow = mutation({
       requestedByUserId: actingUserId ?? agent.userId,
       schedule: agent.schedule,
     });
+    let run: Awaited<ReturnType<typeof createAgentRun>> | undefined;
 
     if (!alreadyRunning) {
+      run = await createAgentRun(ctx, {
+        userId: agent.userId,
+        agentId: agent.id,
+        triggerType: "manual",
+        status: "queued",
+        phase: "queued",
+        summary: "Run requested and queued for launch.",
+      });
+
       await patchDoc(ctx, args.agentId, {
         status: "active",
         lastRunStatus: "running",
@@ -244,13 +255,17 @@ export const runNow = mutation({
 
     await appendAgentLog(ctx, {
       agentId: args.agentId,
+      runId: run?.id,
       event: "agent.run_now.requested",
+      phase: "queued",
       details: operationEvent,
     });
 
     await appendAgentLog(ctx, {
       agentId: args.agentId,
+      runId: run?.id,
       event: "agent.runtime.handoff_prepared",
+      phase: "queued",
       details: handoffPayload,
     });
 
@@ -258,6 +273,7 @@ export const runNow = mutation({
     if (!alreadyRunning) {
       await ctx.scheduler.runAfter(0, internal.runtime.launchBrowserTask, {
         agentId: agent.id,
+        runId: run!.id,
         agentType: agent.type,
         config: agent.config,
       });
@@ -363,7 +379,9 @@ export const deleteAgent = mutation({
 
     await Promise.all([
       deleteByAgentId(ctx, "agentLogs", args.agentId),
+      deleteByAgentId(ctx, "agentRuns", args.agentId),
       deleteByAgentId(ctx, "scholarships", args.agentId),
+      deleteByAgentId(ctx, "labOpenings", args.agentId),
       deleteByAgentId(ctx, "registrationMonitors", args.agentId),
       deleteByAgentId(ctx, "pendingActions", args.agentId),
       deleteByAgentId(ctx, "customWorkflows", args.agentId),

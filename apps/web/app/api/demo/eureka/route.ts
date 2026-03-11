@@ -12,11 +12,9 @@ Step-by-step instructions:
 1. Navigate to ${EUREKA_URL}. Wait for the page to fully load.
 
 2. If you are redirected to a UT EID login page (login.utexas.edu or similar):
-   - Enter the UT EID: ap64646
-   - Enter the password: Applea14x135
-   - Click the login/sign-in button.
-   - Handle any Duo or MFA prompts if they appear.
-   - After login, you should be redirected back to Eureka.
+   - Do NOT attempt to guess, fabricate, or reuse any credentials.
+   - Stop at the login page and report that authenticated access is required
+     to continue the scan.
 
 3. Once on the Eureka opportunities page, look for filters or search options:
    - If there is a department filter, select "Computer Science" or "UTCS".
@@ -55,19 +53,32 @@ export async function POST() {
   }
 
   try {
-    const { BrowserUse } = await import("browser-use-sdk/v3");
-    const client = new BrowserUse({ apiKey });
-
-    const session = await client.sessions.create({
-      task: TASK_PROMPT,
-      model: "bu-max",
-      keepAlive: true,
+    const response = await fetch("https://api.browser-use.com/api/v2/tasks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Browser-Use-API-Key": apiKey,
+      },
+      body: JSON.stringify({
+        task: TASK_PROMPT,
+      }),
     });
 
-    const sessionId = session.id;
+    if (!response.ok) {
+      const errorText = await response.text();
+      return NextResponse.json(
+        { ok: false, message: `Browser Use API error: ${errorText}` },
+        { status: 500 },
+      );
+    }
+
+    const data = await response.json();
+    const sessionId = data.id ?? data.task_id ?? "";
     const liveUrl =
-      session.liveUrl ??
-      `https://cloud.browser-use.com/sessions/${sessionId}`;
+      data.liveUrl ??
+      data.live_url ??
+      data.publicShareUrl ??
+      `https://cloud.browser-use.com/tasks/${sessionId}`;
 
     return NextResponse.json({
       ok: true,

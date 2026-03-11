@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import type {
   Agent,
+  AgentDetailData,
   AgentEvent,
   FilterOption,
   MarketplaceTemplate,
@@ -407,102 +408,6 @@ export function FilterBar({
   );
 }
 
-function ScholarDemoButton() {
-  const [state, setState] = useState<"idle" | "launching" | "launched" | "error">("idle");
-  const [liveUrl, setLiveUrl] = useState<string | null>(null);
-
-  async function handleClick() {
-    if (state === "launched" && liveUrl) {
-      window.open(liveUrl, "_blank");
-      return;
-    }
-    setState("launching");
-    try {
-      const res = await fetch("/api/demo/scholar", { method: "POST" });
-      const data = await res.json();
-      if (data.ok) {
-        setState("launched");
-        setLiveUrl(data.liveUrl ?? null);
-        if (data.liveUrl) {
-          window.open(data.liveUrl, "_blank");
-        }
-      } else {
-        setState("error");
-      }
-    } catch {
-      setState("error");
-    }
-  }
-
-  const label =
-    state === "launching"
-      ? "Launching..."
-      : state === "launched"
-        ? "Watch Live"
-        : state === "error"
-          ? "Failed — retry?"
-          : "Demo";
-
-  return (
-    <button
-      className="button-link demo-btn"
-      onClick={handleClick}
-      disabled={state === "launching"}
-      type="button"
-    >
-      {label}
-    </button>
-  );
-}
-
-function EurekaDemoButton() {
-  const [state, setState] = useState<"idle" | "launching" | "launched" | "error">("idle");
-  const [liveUrl, setLiveUrl] = useState<string | null>(null);
-
-  async function handleClick() {
-    if (state === "launched" && liveUrl) {
-      window.open(liveUrl, "_blank");
-      return;
-    }
-    setState("launching");
-    try {
-      const res = await fetch("/api/demo/eureka", { method: "POST" });
-      const data = await res.json();
-      if (data.ok) {
-        setState("launched");
-        setLiveUrl(data.liveUrl ?? null);
-        if (data.liveUrl) {
-          window.open(data.liveUrl, "_blank");
-        }
-      } else {
-        setState("error");
-      }
-    } catch {
-      setState("error");
-    }
-  }
-
-  const label =
-    state === "launching"
-      ? "Scanning..."
-      : state === "launched"
-        ? "Watch Live"
-        : state === "error"
-          ? "Failed — retry?"
-          : "Scan Labs";
-
-  return (
-    <button
-      className="button-link demo-btn"
-      onClick={handleClick}
-      disabled={state === "launching"}
-      type="button"
-    >
-      {label}
-    </button>
-  );
-}
-
 function getToggleLabel(agent: Agent): string | null {
   if (agent.status === "active") {
     return "Pause";
@@ -517,9 +422,13 @@ function getToggleLabel(agent: Agent): string | null {
 
 export function AgentTable({
   agents,
+  selectedAgentId,
+  onSelectAgent,
   actionControls,
 }: {
   agents: Agent[];
+  selectedAgentId?: string;
+  onSelectAgent?: (agent: Agent) => void;
   actionControls?: {
     busyAgentId?: string | null;
     error?: string | null;
@@ -528,80 +437,135 @@ export function AgentTable({
     onDelete?: (agentId: string) => Promise<void> | void;
   };
 }) {
+  if (agents.length === 0) {
+    return (
+      <div className="table-shell">
+        <p className="empty-state">
+          No agents installed yet. Install a marketplace workflow or deploy a private draft to start tracking runs here.
+        </p>
+        <div className="table-actions">
+          <Link className="button-link" href="/marketplace">
+            Install from marketplace
+          </Link>
+          <Link className="button-link secondary" href="/studio">
+            Build a workflow
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="table-shell">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Agent</th>
-            <th>Status</th>
-            <th>Last run</th>
-            <th>Next run</th>
-            <th>Pending action</th>
-            <th>Schedule</th>
-            <th></th>
-            {actionControls ? <th>Actions</th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {agents.map((agent) => {
-            const toggleLabel = getToggleLabel(agent);
-            const isBusy = actionControls?.busyAgentId === agent.id;
+      <div className="agent-board">
+        {agents.map((agent) => {
+          const toggleLabel = getToggleLabel(agent);
+          const isBusy = actionControls?.busyAgentId === agent.id;
+          const runStateClass =
+            agent.currentRun?.status === "failed"
+              ? "error"
+              : agent.currentRun?.status === "succeeded"
+                ? "active"
+                : agent.currentRun?.status === "waiting_for_input"
+                  ? "paused"
+                  : agent.status;
 
-            return (
-              <tr key={agent.id}>
-                <td>
-                  <strong>{agent.name}</strong>
-                  <span>{agent.source === "dev" ? "Official template" : "Community template"}</span>
-                </td>
-                <td>
-                  <span className={`table-status ${agent.status}`}>{formatStatus(agent.status)}</span>
-                </td>
-                <td>{agent.lastRunLabel}</td>
-                <td>{agent.nextRunLabel}</td>
-                <td>{agent.pendingActionLabel}</td>
-                <td>{agent.scheduleLabel}</td>
-                <td>
-                  {agent.type === "scholar" ? <ScholarDemoButton /> : null}
-                  {agent.type === "eureka" ? <EurekaDemoButton /> : null}
-                </td>
+          return (
+            <article
+              key={agent.id}
+              className={selectedAgentId === agent.id ? "agent-runtime-card selected" : "agent-runtime-card"}
+            >
+              <div className="agent-runtime-top">
+                <div className="agent-runtime-heading">
+                  <div className="agent-runtime-name">
+                    <strong>{agent.name}</strong>
+                    <span>{agent.source === "dev" ? "Official workflow" : "Community workflow"}</span>
+                  </div>
+                  <p className="agent-runtime-summary">{agent.latestSummary}</p>
+                </div>
+                <div className="agent-runtime-badges">
+                  <span className={`table-status ${runStateClass}`}>
+                    {agent.currentRun?.statusLabel ?? formatStatus(agent.status)}
+                  </span>
+                  <span className="status-chip neutral">
+                    {agent.currentRun?.phaseLabel ?? "Idle"}
+                  </span>
+                </div>
+              </div>
+
+              <dl className="agent-runtime-meta">
+                <div>
+                  <dt>Updated</dt>
+                  <dd>{agent.currentRun?.updatedLabel ?? agent.lastRunLabel}</dd>
+                </div>
+                <div>
+                  <dt>Next step</dt>
+                  <dd>{agent.nextStepLabel}</dd>
+                </div>
+                <div>
+                  <dt>Next run</dt>
+                  <dd>{agent.nextRunLabel}</dd>
+                </div>
+                <div>
+                  <dt>Schedule</dt>
+                  <dd>{agent.scheduleLabel}</dd>
+                </div>
+              </dl>
+
+              {agent.currentRun?.resultCounts ? (
+                <div className="metric-chip-row">
+                  {Object.entries(agent.currentRun.resultCounts).map(([key, value]) => (
+                    <span key={key} className="metric-chip">
+                      <strong>{value}</strong>
+                      <span>{formatStatus(key)}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="agent-row-actions">
                 {actionControls ? (
-                  <td>
-                    <div className="agent-row-actions">
+                  <>
+                    <button
+                      className="secondary"
+                      disabled={isBusy}
+                      onClick={() => actionControls.onRunNow?.(agent.id)}
+                      type="button"
+                    >
+                      Run now
+                    </button>
+                    {toggleLabel ? (
                       <button
                         className="secondary"
                         disabled={isBusy}
-                        onClick={() => actionControls.onRunNow?.(agent.id)}
+                        onClick={() => actionControls.onToggleStatus?.(agent)}
                         type="button"
                       >
-                        Run now
+                        {toggleLabel}
                       </button>
-                      {toggleLabel ? (
-                        <button
-                          className="secondary"
-                          disabled={isBusy}
-                          onClick={() => actionControls.onToggleStatus?.(agent)}
-                          type="button"
-                        >
-                          {toggleLabel}
-                        </button>
-                      ) : null}
-                      <button
-                        className="secondary danger"
-                        disabled={isBusy}
-                        onClick={() => actionControls.onDelete?.(agent.id)}
-                        type="button"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+                    ) : null}
+                    <button
+                      className="secondary danger"
+                      disabled={isBusy}
+                      onClick={() => actionControls.onDelete?.(agent.id)}
+                      type="button"
+                    >
+                      Delete
+                    </button>
+                  </>
                 ) : null}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                <button
+                  className="secondary"
+                  onClick={() => onSelectAgent?.(agent)}
+                  type="button"
+                >
+                  {selectedAgentId === agent.id ? "Viewing details" : "View details"}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
       {actionControls?.error ? <p className="form-message error">{actionControls.error}</p> : null}
       <div className="table-actions">
         <Link className="button-link" href="/marketplace">
@@ -614,6 +578,217 @@ export function AgentTable({
           Review settings
         </Link>
       </div>
+    </div>
+  );
+}
+
+export function AgentDetailPanel({
+  agent,
+  details,
+  activeTab,
+  onTabChange,
+}: {
+  agent?: Agent;
+  details: AgentDetailData;
+  activeTab: "progress" | "results" | "history";
+  onTabChange: (tab: "progress" | "results" | "history") => void;
+}) {
+  if (!agent) {
+    return (
+      <div className="table-shell">
+        <p className="empty-state">
+          Select an agent to inspect live progress, recent results, and run history.
+        </p>
+      </div>
+    );
+  }
+
+  const currentRun = details.currentRun ?? agent.currentRun;
+  const debugLink =
+    currentRun?.liveUrl && !currentRun.liveUrl.includes("cloud.browser-use.com/tasks/")
+      ? currentRun.liveUrl
+      : null;
+
+  if (details.isLoading) {
+    return (
+      <div className="table-shell">
+        <p className="empty-state">Loading run details...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="table-shell detail-shell">
+      <div className="detail-shell-header">
+        <div>
+          <h3>{agent.name}</h3>
+          <p>{currentRun?.summary ?? agent.latestSummary}</p>
+        </div>
+        <div className="agent-runtime-badges">
+          <span className={`table-status ${currentRun?.status === "failed" ? "error" : currentRun?.status === "succeeded" ? "active" : currentRun?.status === "waiting_for_input" ? "paused" : agent.status}`}>
+            {currentRun?.statusLabel ?? formatStatus(agent.status)}
+          </span>
+          <span className="status-chip neutral">
+            {currentRun?.phaseLabel ?? "Idle"}
+          </span>
+        </div>
+      </div>
+
+      <div className="tab-strip" role="tablist" aria-label="Agent detail tabs">
+        {(["progress", "results", "history"] as const).map((tab) => (
+          <button
+            key={tab}
+            aria-pressed={activeTab === tab}
+            className={activeTab === tab ? "tab-pill active" : "tab-pill"}
+            onClick={() => onTabChange(tab)}
+            type="button"
+          >
+            {formatStatus(tab)}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "progress" ? (
+        <div className="detail-panel-grid">
+          <article className="detail-card">
+            <h4>Current run</h4>
+            <dl className="detail-list">
+              <div>
+                <dt>Started</dt>
+                <dd>{currentRun?.startedLabel ?? "No run yet"}</dd>
+              </div>
+              <div>
+                <dt>Last update</dt>
+                <dd>{currentRun?.updatedLabel ?? "Not available"}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{currentRun?.statusLabel ?? "Idle"}</dd>
+              </div>
+              <div>
+                <dt>Phase</dt>
+                <dd>{currentRun?.phaseLabel ?? "Idle"}</dd>
+              </div>
+            </dl>
+            {currentRun?.errorCategory ? (
+              <p className="form-note">{getRunGuidance(currentRun.errorCategory)}</p>
+            ) : null}
+            {currentRun?.browserUseTaskId ? (
+              <p className="form-note">Task ID: {currentRun.browserUseTaskId}</p>
+            ) : null}
+            {debugLink ? (
+              <a className="text-action" href={debugLink} rel="noreferrer" target="_blank">
+                Open provider debug link
+              </a>
+            ) : null}
+          </article>
+
+          <article className="detail-card">
+            <h4>Needs your input</h4>
+            {details.pendingActions.length > 0 ? (
+              <div className="detail-stack">
+                {details.pendingActions.map((action) => (
+                  <div key={action.id} className="inline-note">
+                    <strong>{formatPendingActionType(action.type)}</strong>
+                    <span>{action.prompt}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">No open actions for this agent.</p>
+            )}
+          </article>
+
+          <article className="detail-card detail-card-wide">
+            <h4>Run timeline</h4>
+            {details.timeline.length > 0 ? (
+              <EventList events={details.timeline} />
+            ) : (
+              <p className="empty-state">No timeline events yet for this run.</p>
+            )}
+          </article>
+        </div>
+      ) : null}
+
+      {activeTab === "results" ? (
+        <div className="detail-panel-grid">
+          <article className="detail-card">
+            <h4>Registration</h4>
+            {details.registrationMonitors.length > 0 ? (
+              <div className="detail-stack">
+                {details.registrationMonitors.map((monitor) => (
+                  <div key={monitor.id} className="inline-note">
+                    <strong>{monitor.courseNumber} ({monitor.uniqueId})</strong>
+                    <span>{monitor.semester} · {formatStatus(monitor.status)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">No registration monitor results for this agent.</p>
+            )}
+          </article>
+
+          <article className="detail-card">
+            <h4>Scholarships</h4>
+            {details.scholarships.length > 0 ? (
+              <div className="detail-stack">
+                {details.scholarships.slice(0, 6).map((match) => (
+                  <div key={match.id} className="inline-note">
+                    <strong>{match.title}</strong>
+                    <span>
+                      {match.source}
+                      {typeof match.matchScore === "number" ? ` · Fit ${(match.matchScore * 100).toFixed(0)}%` : ""}
+                      {match.missingFields?.length ? ` · Needs ${match.missingFields.join(", ")}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">No scholarship results for this agent.</p>
+            )}
+          </article>
+
+          <article className="detail-card detail-card-wide">
+            <h4>Lab openings</h4>
+            {details.labOpenings.length > 0 ? (
+              <div className="detail-stack">
+                {details.labOpenings.slice(0, 6).map((opening) => (
+                  <div key={opening.id} className="inline-note">
+                    <strong>{opening.labName}</strong>
+                    <span>
+                      {opening.professorName} · {opening.department} · {formatStatus(opening.status)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">No lab-opening results for this agent.</p>
+            )}
+          </article>
+        </div>
+      ) : null}
+
+      {activeTab === "history" ? (
+        <div className="detail-stack">
+          {details.runs.length > 0 ? (
+            details.runs.map((run) => (
+              <article key={run.id} className="history-card">
+                <div className="history-card-head">
+                  <div>
+                    <strong>{run.statusLabel}</strong>
+                    <span>{run.phaseLabel}</span>
+                  </div>
+                  <span>{run.startedLabel}</span>
+                </div>
+                <p>{run.summary ?? "No summary captured for this run."}</p>
+                {run.error ? <p className="form-message error">{run.error}</p> : null}
+              </article>
+            ))
+          ) : (
+            <p className="empty-state">This agent has no recorded run history yet.</p>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -705,5 +880,33 @@ export function SettingsGrid({ sections }: { sections: SettingsSection[] }) {
 }
 
 function formatStatus(status: string) {
-  return status.replace(/_/g, " ");
+  return status
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatPendingActionType(type: string) {
+  switch (type) {
+    case "email_draft":
+      return "Email draft";
+    default:
+      return formatStatus(type);
+  }
+}
+
+function getRunGuidance(category: string) {
+  switch (category) {
+    case "authentication":
+      return "Authentication is blocking progress. Recheck the login step or complete Duo before retrying.";
+    case "configuration":
+      return "This run is missing required configuration. Review the agent setup before retrying.";
+    case "site_changed":
+      return "The target site likely changed. Review the recent output and update the workflow selectors or prompt.";
+    case "provider_error":
+      return "The browser provider returned an upstream error. Retry after a short delay.";
+    case "timeout":
+      return "The run exceeded its polling window. Retry or narrow the target workflow scope.";
+    default:
+      return "The run failed in a way that needs review before retrying.";
+  }
 }

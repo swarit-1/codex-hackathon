@@ -6,6 +6,7 @@ import {
 } from "./lib/db";
 import { notFoundError } from "./lib/errors";
 import { appendAgentLog } from "./lib/logging";
+import { createAgentRun } from "./lib/agentRuns";
 import { getAgentOrThrow } from "./lib/agentUtils";
 import {
   deriveLifecycleStatusFromRunStatus,
@@ -85,8 +86,18 @@ export const triggerAgentRun = mutation({
       requestedAt,
       agent.userId
     );
+    let run: Awaited<ReturnType<typeof createAgentRun>> | undefined;
 
     if (!alreadyRunning) {
+      run = await createAgentRun(ctx, {
+        userId: agent.userId,
+        agentId: agent.id,
+        triggerType: args.runType,
+        status: "queued",
+        phase: "queued",
+        summary: "Run queued for orchestration handoff.",
+      });
+
       await patchDoc(ctx, args.agentId, {
         status: "active",
         lastRunStatus: "running",
@@ -98,12 +109,16 @@ export const triggerAgentRun = mutation({
 
     await appendAgentLog(ctx, {
       agentId: args.agentId,
+      runId: run?.id,
       event: "agent.orchestrator.triggered",
+      phase: "queued",
       details: operationEvent,
     });
     await appendAgentLog(ctx, {
       agentId: args.agentId,
+      runId: run?.id,
       event: "agent.runtime.handoff_prepared",
+      phase: "queued",
       details: handoffPayload,
       scenarioId:
         args.runType === "manual"
@@ -225,8 +240,18 @@ export const resumeFromPendingAction = mutation({
       requestedAt,
       pendingAction.userId
     );
+    let run: Awaited<ReturnType<typeof createAgentRun>> | undefined;
 
     if (!alreadyRunning) {
+      run = await createAgentRun(ctx, {
+        userId: agent.userId,
+        agentId: agent.id,
+        triggerType: "resume",
+        status: "queued",
+        phase: "queued",
+        summary: "Run queued after pending action resume.",
+      });
+
       await patchDoc(ctx, pendingAction.agentId, {
         status: "active",
         lastRunStatus: "running",
@@ -238,7 +263,9 @@ export const resumeFromPendingAction = mutation({
 
     await appendAgentLog(ctx, {
       agentId: pendingAction.agentId,
+      runId: run?.id,
       event: "pending_action.resume_requested",
+      phase: "queued",
       details: {
         pendingActionId: pendingAction.id,
         operationEvent,
@@ -246,7 +273,9 @@ export const resumeFromPendingAction = mutation({
     });
     await appendAgentLog(ctx, {
       agentId: pendingAction.agentId,
+      runId: run?.id,
       event: "agent.runtime.handoff_prepared",
+      phase: "queued",
       details: handoffPayload,
     });
 

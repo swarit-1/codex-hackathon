@@ -1,6 +1,9 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+  agentRunErrorCategoryValidator,
+  agentRunPhaseValidator,
+  agentRunTrackingStatusValidator,
   agentOwnerTypeValidator,
   agentRunStatusValidator,
   agentStatusValidator,
@@ -13,6 +16,7 @@ import {
   logLevelValidator,
   monitorStatusValidator,
   pendingActionTypeValidator,
+  runtimeRunTypeValidator,
   scholarshipStatusValidator,
   scheduleConfigValidator,
   scenarioIdValidator,
@@ -114,6 +118,26 @@ export default defineSchema({
     .index("by_userId_ownerType", ["userId", "ownerType"])
     .index("by_templateId", ["templateId"])
     .index("by_status_nextRunAt", ["status", "nextRunAt"]),
+
+  agentRuns: defineTable({
+    userId: v.id("users"),
+    agentId: v.id("agents"),
+    triggerType: runtimeRunTypeValidator,
+    status: agentRunTrackingStatusValidator,
+    phase: agentRunPhaseValidator,
+    startedAt: v.number(),
+    updatedAt: v.number(),
+    endedAt: v.optional(v.number()),
+    browserUseTaskId: v.optional(v.string()),
+    liveUrl: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    resultCounts: v.optional(v.any()),
+    error: v.optional(v.string()),
+    errorCategory: v.optional(agentRunErrorCategoryValidator),
+  })
+    .index("by_agentId_startedAt", ["agentId", "startedAt"])
+    .index("by_agentId_updatedAt", ["agentId", "updatedAt"])
+    .index("by_userId_updatedAt", ["userId", "updatedAt"]),
 
   scholarships: defineTable({
     userId: v.id("users"),
@@ -218,11 +242,13 @@ export default defineSchema({
 
   agentLogs: defineTable({
     agentId: v.id("agents"),
+    runId: v.optional(v.id("agentRuns")),
     timestamp: v.number(),
     event: v.string(),
     level: logLevelValidator,
     details: v.any(),
     screenshots: v.optional(v.array(v.string())),
     scenarioId: v.optional(scenarioIdValidator),
+    phase: v.optional(agentRunPhaseValidator),
   }).index("by_agentId_timestamp", ["agentId", "timestamp"]),
 });

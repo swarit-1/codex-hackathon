@@ -81,11 +81,11 @@ export async function POST(request: Request) {
       password: body?.password || undefined,
     });
 
-    const response = await fetch("https://api.browser-use.com/api/v1/run-task", {
+    const response = await fetch("https://api.browser-use.com/api/v2/tasks", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "X-Browser-Use-API-Key": apiKey,
       },
       body: JSON.stringify({
         task,
@@ -103,7 +103,9 @@ export async function POST(request: Request) {
     const data = await response.json();
     const sessionId = data.id ?? data.task_id ?? "";
     const liveUrl =
+      data.liveUrl ??
       data.live_url ??
+      data.publicShareUrl ??
       `https://cloud.browser-use.com/tasks/${sessionId}`;
 
     return NextResponse.json({

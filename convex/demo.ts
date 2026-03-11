@@ -128,7 +128,7 @@ const demoTemplates: DemoTemplateSeed[] = [
     source: "student",
     category: "Research",
     visibility: "public",
-    templateType: "custom",
+    templateType: "eureka",
     installCount: 74,
     cadenceLabel: "Three scans per week",
     setupFields: ["Research interests", "Department targets", "Faculty list"],
@@ -286,6 +286,12 @@ function buildInputSchema(seed: DemoTemplateSeed) {
     return {
       fields: [
         {
+          key: "courseNumber",
+          label: "Course number",
+          type: "text",
+          required: true,
+        },
+        {
           key: "eidLogin",
           label: "EID login",
           type: "text",
@@ -318,6 +324,89 @@ function buildInputSchema(seed: DemoTemplateSeed) {
     } as ConfigEnvelope["inputSchema"];
   }
 
+  if (seed.title === "ScholarBot") {
+    return {
+      fields: [
+        {
+          key: "major",
+          label: "Major",
+          type: "text",
+          required: true,
+        },
+        {
+          key: "classification",
+          label: "Classification",
+          type: "select",
+          required: true,
+          options: [
+            { label: "Freshman", value: "Freshman" },
+            { label: "Sophomore", value: "Sophomore" },
+            { label: "Junior", value: "Junior" },
+            { label: "Senior", value: "Senior" },
+            { label: "Graduate", value: "Graduate" },
+          ],
+        },
+        {
+          key: "sources",
+          label: "Scholarship sources",
+          type: "textarea",
+          required: true,
+        },
+        {
+          key: "essayNotes",
+          label: "Resume and essay notes",
+          type: "textarea",
+          required: false,
+        },
+        {
+          key: "notificationMethod",
+          label: "Notification method",
+          type: "select",
+          required: true,
+          options: [
+            { label: "In-app alerts", value: "in_app" },
+            { label: "Email and in-app", value: "email_and_in_app" },
+          ],
+        },
+      ],
+    } as ConfigEnvelope["inputSchema"];
+  }
+
+  if (seed.title === "Lab Openings Watch") {
+    return {
+      fields: [
+        {
+          key: "researchInterests",
+          label: "Research interests",
+          type: "textarea",
+          required: true,
+        },
+        {
+          key: "departmentTargets",
+          label: "Department targets",
+          type: "text",
+          required: true,
+        },
+        {
+          key: "facultyList",
+          label: "Faculty list",
+          type: "textarea",
+          required: false,
+        },
+        {
+          key: "notificationMethod",
+          label: "Notification method",
+          type: "select",
+          required: true,
+          options: [
+            { label: "In-app alerts", value: "in_app" },
+            { label: "Email and in-app", value: "email_and_in_app" },
+          ],
+        },
+      ],
+    } as ConfigEnvelope["inputSchema"];
+  }
+
   return {
     fields: seed.setupFields.map((field, index) => ({
       key: `field_${index + 1}`,
@@ -338,10 +427,28 @@ function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
       title: seed.title,
       ...(seed.title === "RegBot"
         ? {
+            courseNumber: "",
             eidLogin: "",
             uniqueId: "",
             semester: "Fall 2026",
             conflictPolicy: "",
+          }
+        : {}),
+      ...(seed.title === "ScholarBot"
+        ? {
+            major: "Computer Science",
+            classification: "Junior",
+            sources: "UT Scholarships\nFastWeb",
+            essayNotes: "",
+            notificationMethod: "email_and_in_app",
+          }
+        : {}),
+      ...(seed.title === "Lab Openings Watch"
+        ? {
+            researchInterests: "Machine learning, systems, natural language processing",
+            departmentTargets: "Computer Science, ECE",
+            facultyList: "",
+            notificationMethod: "email_and_in_app",
           }
         : {}),
       ...(seed.title === "IMBot"
@@ -362,10 +469,28 @@ function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
       title: seed.title,
       ...(seed.title === "RegBot"
         ? {
+            courseNumber: "",
             eidLogin: "",
             uniqueId: "",
             semester: "Fall 2026",
             conflictPolicy: "",
+          }
+        : {}),
+      ...(seed.title === "ScholarBot"
+        ? {
+            major: "Computer Science",
+            classification: "Junior",
+            sources: "UT Scholarships\nFastWeb",
+            essayNotes: "",
+            notificationMethod: "email_and_in_app",
+          }
+        : {}),
+      ...(seed.title === "Lab Openings Watch"
+        ? {
+            researchInterests: "Machine learning, systems, natural language processing",
+            departmentTargets: "Computer Science, ECE",
+            facultyList: "",
+            notificationMethod: "email_and_in_app",
           }
         : {}),
       ...(seed.title === "IMBot"

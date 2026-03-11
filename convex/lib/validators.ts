@@ -93,6 +93,37 @@ export const agentRunStatusValidator = v.union(
   v.literal("cancelled")
 );
 
+export const agentRunTrackingStatusValidator = v.union(
+  v.literal("queued"),
+  v.literal("launching"),
+  v.literal("running"),
+  v.literal("waiting_for_input"),
+  v.literal("succeeded"),
+  v.literal("failed"),
+  v.literal("cancelled")
+);
+
+export const agentRunPhaseValidator = v.union(
+  v.literal("queued"),
+  v.literal("starting_browser"),
+  v.literal("navigating"),
+  v.literal("authenticating"),
+  v.literal("scanning"),
+  v.literal("extracting"),
+  v.literal("writing_results"),
+  v.literal("completed"),
+  v.literal("failed")
+);
+
+export const agentRunErrorCategoryValidator = v.union(
+  v.literal("configuration"),
+  v.literal("authentication"),
+  v.literal("site_changed"),
+  v.literal("provider_error"),
+  v.literal("timeout"),
+  v.literal("unknown")
+);
+
 export const authMethodValidator = v.union(
   v.literal("email"),
   v.literal("ut_sso"),
@@ -225,7 +256,29 @@ export const agentListFilterArgs = {
 export const agentLogListArgs = {
   ...sessionTokenArg,
   agentId: v.id("agents"),
+  runId: v.optional(v.id("agentRuns")),
   ...paginationArgs,
+};
+
+export const agentRunGetArgs = {
+  ...sessionTokenArg,
+  runId: v.id("agentRuns"),
+};
+
+export const agentRunCurrentByAgentArgs = {
+  ...sessionTokenArg,
+  agentId: v.id("agents"),
+};
+
+export const agentRunListByAgentArgs = {
+  ...sessionTokenArg,
+  agentId: v.id("agents"),
+  ...paginationArgs,
+};
+
+export const agentRunListCurrentByUserArgs = {
+  ...sessionTokenArg,
+  userId: v.id("users"),
 };
 
 export const userProfileCreateArgs = {
@@ -313,6 +366,12 @@ export const scholarshipListArgs = {
   ...paginationArgs,
 };
 
+export const scholarshipListByAgentArgs = {
+  ...sessionTokenArg,
+  agentId: v.id("agents"),
+  ...paginationArgs,
+};
+
 export const scholarshipUpsertFromRunArgs = {
   userId: v.id("users"),
   agentId: v.id("agents"),
@@ -341,6 +400,12 @@ export const registrationMonitorListArgs = {
   ...paginationArgs,
 };
 
+export const registrationMonitorListByAgentArgs = {
+  ...sessionTokenArg,
+  agentId: v.id("agents"),
+  ...paginationArgs,
+};
+
 export const pendingActionCreateArgs = {
   ...sessionTokenArg,
   userId: v.id("users"),
@@ -358,6 +423,12 @@ export const pendingActionResolveArgs = {
 export const pendingActionListArgs = {
   ...sessionTokenArg,
   userId: v.id("users"),
+  ...paginationArgs,
+};
+
+export const pendingActionListByAgentArgs = {
+  ...sessionTokenArg,
+  agentId: v.id("agents"),
   ...paginationArgs,
 };
 
@@ -392,11 +463,19 @@ export const customWorkflowUpdateArgs = {
 export const agentLogAppendArgs = {
   ...sessionTokenArg,
   agentId: v.id("agents"),
+  runId: v.optional(v.id("agentRuns")),
   event: v.string(),
   level: v.optional(logLevelValidator),
   details: v.any(),
   screenshots: v.optional(v.array(v.string())),
   scenarioId: v.optional(scenarioIdValidator),
+  phase: v.optional(agentRunPhaseValidator),
+};
+
+export const labOpeningListByAgentArgs = {
+  ...sessionTokenArg,
+  agentId: v.id("agents"),
+  ...paginationArgs,
 };
 
 export const agentLogListByUserArgs = {
