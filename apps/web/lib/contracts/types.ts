@@ -12,7 +12,8 @@ export type TemplateSource = "dev" | "student";
 export type SubmissionStatus = "draft" | "pending_review" | "approved" | "rejected";
 export type TemplateVisibility = "private" | "public";
 export type AgentOwnerType = "first_party" | "student" | "generated";
-export type AgentType = "scholar" | "reg" | "eureka" | "custom"| "im";
+export type AgentType = "scholar" | "reg" | "eureka" | "custom" | "im";
+
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
 export type AgentRunTrackingStatus =
   | "queued"

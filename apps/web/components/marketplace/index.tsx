@@ -21,6 +21,7 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
   const { agents } = useInstalledAgents();
   const installTemplate = useMarketplaceInstall();
   const categories = useMarketplaceCategories();
+
   const [activeCategory, setActiveCategory] = useState("all");
   const [installingTemplateId, setInstallingTemplateId] = useState<string | null>(null);
   const [installErrorByTemplate, setInstallErrorByTemplate] = useState<Record<string, string | null>>({});

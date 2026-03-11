@@ -227,46 +227,51 @@ async function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): Pr
 
   switch (agentType) {
     case "scholar": {
-      const sources = normalizeStringList(currentConfig.sources, ["UT Scholarships"]);
       const major =
         (currentConfig.major as string) ??
         ((currentConfig.profile as JsonObject | undefined)?.major as string) ??
         "Computer Science";
-      const classification =
-        (currentConfig.classification as string) ??
-        ((currentConfig.profile as JsonObject | undefined)?.classification as string) ??
-        "Undergraduate";
-      const essayNotes = (currentConfig.essayNotes as string) ?? "";
+      const startUrl = targetUrl || "https://utexas.scholarships.ngwebsolutions.com/Scholarships/Search";
+      return `You are a browser automation agent helping a UT Austin student apply to a scholarship.
 
-      return `You are a scholarship discovery agent for a UT Austin ${classification} ${major} student.
+GOAL: Navigate to the scholarship search page, find the "CREEES McWilliams Scholarship", \
+click its "Apply Now" button, and then fill out the entire scholarship application \
+form across all pages — but DO NOT submit at the end.
 
-GOAL: Navigate to the scholarship search page and find relevant scholarships.
+Step-by-step instructions:
 
-1. Navigate to ${targetUrl || "https://utexas.scholarships.ngwebsolutions.com/ScholarX_StudentLanding.aspx"}.
-2. Search through available scholarships.
-3. Focus on scholarships that plausibly fit the student profile and are still open or upcoming.
-4. For each scholarship found, capture: title, source, deadline, eligibility requirements, fit score from 0 to 1, and any missing materials.
-5. Do not submit or finalize any applications.
+1. You should already be on ${startUrl}. Wait for the page to fully load.
 
-Student notes:
-- Sources to check: ${sources.join(", ")}
-${essayNotes ? `- Resume and essay notes: ${essayNotes}` : "- Resume and essay notes: none provided"}
+2. Look through the list of scholarships on the page for "CREEES McWilliams Scholarship". \
+   You may need to scroll down or paginate through results to find it. \
+   Once you find it, click the "Apply Now" button next to it.
 
-Return the final result as JSON only inside a \`\`\`json code block using this shape:
-{
-  "scholarships": [
-    {
-      "title": "string",
-      "source": "string",
-      "deadline": "YYYY-MM-DD or null",
-      "eligibility": "string",
-      "matchScore": 0.0,
-      "status": "found",
-      "missingFields": ["string"]
-    }
-  ],
-  "summary": "string"
-}`;
+3. If you are redirected to a UT EID login page (login.utexas.edu or similar):
+   - Enter the UT EID and password if credentials are provided.
+   - Click the login/sign-in button.
+   - Handle any Duo or MFA prompts if they appear (e.g. click "Send Me a Push" \
+     or approve via the Duo app — wait for it to complete).
+   - After login, you should be redirected back to the scholarship application.
+
+4. Once on the scholarship application form, fill out ALL available fields on \
+   each page. Use reasonable values for a UT Austin undergraduate ${major} student. \
+   For text fields that ask for essays or explanations, write 2-3 thoughtful sentences.
+
+5. After completing all fields on a page, click "Next", "Continue", or the next \
+   step/page button to proceed.
+
+6. Continue filling out ALL pages of the application.
+
+7. On the FINAL page/step, STOP. Do NOT click "Submit", "Finish", or any button \
+   that would finalize/submit the application.
+
+8. Report back what fields you found on each page and what values you entered.
+
+CRITICAL RULES:
+- DO NOT click any Submit or Finish button that would finalize the application.
+- Fill out EVERY field on EVERY page before moving to the next page.
+- If a dropdown does not have an exact match, pick the closest available option.
+- Take your time and be thorough — fill ALL fields before proceeding.`;
     }
 
     case "reg": {
@@ -372,6 +377,9 @@ Return the final result as JSON only inside a \`\`\`json code block using this s
   }
 }
 
+// Browser profile with saved cookies/auth for UT Austin sites
+const BROWSER_USE_PROFILE_ID = "bcf273d4-abc4-40c4-b506-8ad330d4c678";
+
 async function callBrowserUseAPI(
   apiKey: string,
   taskPrompt: string
@@ -384,6 +392,10 @@ async function callBrowserUseAPI(
     },
     body: JSON.stringify({
       task: taskPrompt,
+      sessionSettings: {
+        profileId: BROWSER_USE_PROFILE_ID,
+        proxyCountryCode: "us",
+      },
     }),
   });
 
