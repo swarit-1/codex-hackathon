@@ -1,331 +1,195 @@
-# Dev 1 Runbook: Frontend (Next.js Dashboard UX)
+# Dev 1 Runbook: Frontend (Marketplace UI + My Agents + Model-to-Agent Studio)
 
 ## 1) Mission and Ownership
 
-**Owner:** Dev 1 (Frontend Agent)  
-**Branch/worktree:** `feature/frontend`  
-**Primary goal:** Deliver a production-quality hackathon UI for LonghorNet that supports ScholarBot and RegBot end-to-end first, then FlowForge and settings polish.
+**Owner:** Dev 1 (Frontend)
+**Branch/worktree:** `feature/frontend`
+**Primary goal:** Deliver the marketplace-first product interface with production-ready UX for Marketplace, My Agents, and Model-to-Agent Studio.
 
-### In Scope
-- Next.js 14 App Router frontend implementation.
-- Auth screen UX, onboarding flow, dashboard home, ScholarBot/RegBot/FlowForge/Settings panels.
-- Real-time state rendering from Convex subscriptions.
-- Pending-action UX and resume interactions.
-- Demo-safe fallback mode in UI.
-
-### Out of Scope
-- Convex schema/function implementation (Dev 2).
-- Browser Use runtime/agent logic (Dev 3).
-- Infrastructure/deployment automation beyond frontend configs.
+### Ownership Boundaries
+- Own all frontend routes, components, interaction logic, and real-time rendering.
+- Do not implement backend schema/contracts (Dev 2) or runtime execution logic (Dev 3).
+- Close integration/UI defects reported by Dev 4 release-gate testing.
 
 ---
 
-## 2) Non-Negotiables (Shared Contracts)
+## 2) Shared Contracts and Types (Locked Across All 4 Devs)
 
-## Canonical Enums
+### Canonical Status Types
 - `AgentStatus = "active" | "paused" | "completed" | "error"`
 - `ScholarshipStatus = "found" | "applying" | "paused" | "submitted" | "expired"`
 - `MonitorStatus = "watching" | "registered" | "failed"`
 - `PendingActionType = "essay" | "detail" | "confirmation"`
+- `TemplateSource = "dev" | "student"`
+- `SubmissionStatus = "draft" | "pending_review" | "approved" | "rejected"`
+- `TemplateVisibility = "private" | "public"`
 
-## Required Backend Contracts (must consume exactly)
-- `dashboard.getOverview(userId)`
-- `users.upsertProfile(payload)`, `users.getProfile()`
-- `agents.create(type, config)`, `agents.updateStatus(agentId, status)`, `agents.listByUser()`
-- `scholarships.listByUser(filters)`, `scholarships.upsertFromRun(payload)`
-- `registrationMonitors.create(payload)`, `registrationMonitors.listByUser()`
-- `pendingActions.create(payload)`, `pendingActions.resolve(actionId, response)`
-- `customWorkflows.create(payload)`, `customWorkflows.update(agentId, patch)`
-- `agentLogs.append(payload)`, `agentLogs.list(agentId, pagination)`
+### Required APIs (Consume As-Is)
+- Existing:
+  - `dashboard.getOverview(userId)`
+  - `users.upsertProfile(payload)` / `users.getProfile()`
+  - `agents.create(type, config)` / `agents.updateStatus(agentId, status)` / `agents.listByUser()`
+  - `scholarships.listByUser(filters)` / `scholarships.upsertFromRun(payload)`
+  - `registrationMonitors.create(payload)` / `registrationMonitors.listByUser()`
+  - `pendingActions.create(payload)` / `pendingActions.resolve(actionId, response)`
+  - `customWorkflows.create(payload)` / `customWorkflows.update(agentId, patch)`
+  - `agentLogs.append(payload)` / `agentLogs.list(agentId, pagination)`
+- Added:
+  - `marketplace.listTemplates(filters)`
+  - `marketplace.getTemplate(templateId)`
+  - `marketplace.installTemplate(templateId, config)`
+  - `marketplace.submitTemplate(payload)`
+  - `marketplace.reviewSubmission(submissionId, decision)`
+  - `agents.runNow(agentId)`
+  - `agents.updateSchedule(agentId, schedule)`
+  - `agents.delete(agentId)`
 
-## Required Orchestration Interfaces (must reflect statuses/events)
-- `orchestrator.triggerAgentRun(agentId, runType)`
-- `orchestrator.handleWebhook(eventPayload)`
-- `orchestrator.resumeFromPendingAction(actionId)`
-- `flowforge.generateWorkflowSpec(nlDescription)`
-- `flowforge.generateAgentScript(spec)`
+### Naming Policy
+- Product/UI terminology: **Model-to-Agent Studio**.
+- Compatibility alias allowed in integration payloads: `flowforge.*` internal contracts.
 
-## UI Data Contracts to Lock
-- One dashboard subscription payload: overview metrics + pending actions + latest run events.
-- Per-panel list/detail payloads for scholarships, registration monitors, custom workflows, and logs.
+### Shared Test Scenario IDs
+- Existing: `scholarbot_happy_path`, `regbot_happy_path`, `flowforge_happy_path`, `regbot_duo_timeout`, `webhook_retry_path`
+- Added: `marketplace_install_dev_template`, `marketplace_install_student_template`, `submission_pending_to_approved`, `my_agents_run_now`, `my_agents_schedule_update`
 
----
-
-## 3) Coordination Rules (Must Follow)
-
-1. Contract freeze points: after **Phase 1** and **Phase 3**.
-2. Sync cadence: every 30 minutes with Dev 2 and Dev 3.
-3. Hard integration windows: midpoint and pre-demo.
-4. Merge policy: merge only after local tests pass + one integration smoke test.
-5. Blocker protocol: if blocked >20 minutes, publish blocker note with owner, dependency, fallback.
-6. Demo priority: ScholarBot + RegBot full demo path takes precedence over FlowForge enhancements.
-
----
-
-## 4) Working Setup and File Conventions
-
-## Recommended frontend structure
-```txt
-apps/web/
-  app/
-    page.tsx
-    dashboard/page.tsx
-    scholarbot/page.tsx
-    regbot/page.tsx
-    flowforge/page.tsx
-    settings/page.tsx
-  components/
-    dashboard/
-    scholarbot/
-    regbot/
-    flowforge/
-    settings/
-    shared/
-  lib/
-    convex/
-    contracts/
-    utils/
-  styles/
-```
-
-## Tracking artifacts (must maintain)
-- `docs/coordination/frontend-known-issues.md`
-- `docs/coordination/frontend-phase-checklists.md`
-- `docs/contracts/frontend-data-needs.md`
+### Contract Freeze Process (Owned by Dev 4)
+- `v1-freeze` after Phase 1.
+- `v2-freeze` after Phase 3.
+- Any post-freeze changes require Dev 4 ticket + compatibility note.
 
 ---
 
-## 5) Phase-by-Phase Execution
+## 3) Coordination Rules
 
-## Phase 0 (30-45 min): Setup and Shell
-**Objective:** Bootstrap runnable Next.js app with route skeleton and visual foundation.
-
-### Tasks
-1. Initialize Next.js 14 + TypeScript + App Router.
-2. Install/configure Tailwind CSS and shadcn/ui.
-3. Build base app layout with navigation to: `/`, `/dashboard`, `/scholarbot`, `/regbot`, `/flowforge`, `/settings`.
-4. Add shared design tokens (colors, spacing, status chip styles) to avoid one-off styling.
-5. Add Convex provider wiring and placeholder hooks layer.
-6. Add error boundary and loading skeleton components.
-
-### Deliverables
-- All six routes render.
-- Shared layout/nav and status chip component committed.
-- Placeholder data hooks in place.
-- Phase checklist + known issues log updated.
-
-### Acceptance Criteria
-- `npm run dev` starts cleanly.
-- No blocking TypeScript errors.
-- Every route has a distinct scaffold view and loading state.
-
-### Handoff Needed
-- Dev 2: initial function names and payload placeholders.
-- Dev 3: initial event/status taxonomy for run-state display.
+1. 30-minute sync cadence with Dev 2/3/4.
+2. Freeze points after Phase 1 and Phase 3.
+3. Merge only after local tests + one integration smoke pass.
+4. Blocker SLA: blocked >20 minutes must include fallback.
+5. Priority order: Marketplace/My Agents must-have flows, then Studio polish.
 
 ---
 
-## Phase 1: Auth + Onboarding
-**Objective:** Implement login screen and complete onboarding wizard bound to profile schema.
+## 4) Phase-by-Phase Execution (IA Order Locked)
 
-### Tasks
-1. Build landing/auth page:
-   - UT SSO button as primary CTA.
-   - Email/password fallback as secondary.
-2. Build onboarding multi-step flow with exact PRD fields:
-   - `name`, `major`, `GPA`, `classification`, `interests`, demographics, financial-need indicators.
-3. Implement client-side validation:
-   - Required fields and bounds (GPA format and range).
-4. Connect onboarding submit to `users.upsertProfile(payload)`.
-5. Load initial values from `users.getProfile()` for resume/edit behavior.
-6. Add route guard:
-   - If no completed profile, redirect to onboarding.
+### Phase 0: Frontend Foundation
+**Objective:** Prepare route shell and shared UI primitives for new IA.
 
-### Deliverables
-- Auth page + onboarding wizard fully interactive.
-- Profile save/reload path working via Convex contracts or stub.
-- Validation errors and success messages implemented.
+**Tasks**
+1. Establish top-level routes for `/marketplace`, `/my-agents`, `/studio` (and auth/settings).
+2. Build shared layout/nav and status badge components.
+3. Add typed client contracts for all shared types and new APIs.
 
-### Acceptance Criteria
-- New user can finish onboarding in one pass.
-- Returning user sees saved profile values.
-- Guarded navigation blocks dashboard until onboarding complete.
+**Deliverables**
+- Route shell, navigation, base loading/empty/error components.
 
-### Tests
-- Route rendering and guard behavior.
-- Validation checks for required fields and invalid GPA.
-- Submission success/error UX paths.
+### Phase 1: Marketplace UI
+**Objective:** Build browse/install/publish UX for dev and student templates.
 
-### Handoff Needed
-- Dev 2: finalized profile payload shape after Phase 1 contract freeze.
+**Tasks**
+1. Implement Marketplace tabs: `dev-built`, `student-built`.
+2. Implement template cards with source, category, install count, and status badges.
+3. Implement template detail view and install CTA.
+4. Implement student submission form with `pending_review` badge state.
 
----
+**Deliverables**
+- End-to-end UI for listing and installing templates.
 
-## Phase 2: Dashboard Home
-**Objective:** Build real-time operational dashboard with quick actions and action queue.
+**Acceptance Criteria**
+- `marketplace_install_dev_template` renders correctly.
+- `marketplace_install_student_template` renders correctly.
+- `v1-freeze` acknowledged by Dev 4.
 
-### Tasks
-1. Build overview cards:
-   - Active agents count.
-   - Pending actions count.
-   - Recent activity summary.
-2. Subscribe to `dashboard.getOverview(userId)` and render live updates.
-3. Add quick action buttons:
-   - Add Scholarship Monitor.
-   - Watch a Course.
-   - Create Workflow.
-4. Build recent activity feed panel with status chips and timestamps.
-5. Add robust empty/loading/error states for each dashboard module.
+### Phase 2: My Agents UI
+**Objective:** Build operational control center for running instances.
 
-### Deliverables
-- Dashboard home connected to live overview payload.
-- Quick actions route correctly.
-- Activity feed updates without refresh.
+**Tasks**
+1. Implement agent list with filtering (status/type/source).
+2. Add controls: pause/resume, run now, edit schedule, delete.
+3. Add per-agent log timeline and screenshot references.
 
-### Acceptance Criteria
-- Overview values update in near real time as backend data changes.
-- No manual refresh required for status transitions.
+**Deliverables**
+- My Agents panel with complete operational controls.
 
-### Tests
-- Subscription update rendering.
-- Empty/feed fallback behavior.
-- Quick action navigation smoke test.
+**Acceptance Criteria**
+- UI paths for `my_agents_run_now` and `my_agents_schedule_update` are stable.
 
-### Handoff Needed
-- Dev 2: stable `dashboard.getOverview` payload.
-- Dev 3: run event names and severity mapping.
+### Phase 3: Model-to-Agent Studio UI
+**Objective:** Build natural language generation + deploy workflow UX.
 
----
+**Tasks**
+1. Build prompt input, preview/confirmation, and deploy UX.
+2. Display generated workflow status and run output references.
+3. Add optional "publish to marketplace" action.
 
-## Phase 3: ScholarBot + RegBot Panels
-**Objective:** Build all MVP-critical workflows for scholarship and registration monitoring.
+**Deliverables**
+- Studio flow usable for one full prompt-to-deploy cycle.
 
-### Tasks
-1. ScholarBot panel:
-   - Scholarship table/list with match score, deadline, status.
-   - Scholarship detail view showing progress and required fields.
-   - Pending action component with inline essay editor and resume action.
-2. RegBot panel:
-   - Watchlist with statuses (`watching`, `registered`, `failed`).
-   - Add course form (department+number or unique ID).
-   - Poll history/log timeline with timestamps and screenshot links.
-3. Shared log viewer:
-   - Display event, timestamp, details, screenshot references.
-4. Wire actions:
-   - Resolve pending actions via `pendingActions.resolve(actionId, response)`.
-   - Create/update monitors via monitor contracts.
+**Acceptance Criteria**
+- `flowforge_happy_path` (Studio alias) is visually and functionally complete.
+- `v2-freeze` acknowledged by Dev 4.
 
-### Deliverables
-- ScholarBot and RegBot panels fully wired.
-- Resume flow and watchlist create flow working.
-- Log viewer usable for demo storytelling.
+### Phase 4: Legacy Feature Surface Alignment
+**Objective:** Ensure ScholarBot/RegBot are represented as first-party templates.
 
-### Acceptance Criteria
-- Can demonstrate: scholarship pause -> user input -> resume trigger.
-- Can demonstrate: monitor creation -> status transitions -> logs visible.
+**Tasks**
+1. Update ScholarBot/RegBot UI entry points to originate from Marketplace installs.
+2. Ensure pending-action UX and monitor UX remain accessible from My Agents.
+3. Remove outdated IA references from UI copy.
 
-### Tests
-- Pending-action resolve optimistic update and rollback.
-- Scholarship list/detail rendering.
-- Monitor create/list/update rendering flow.
+**Deliverables**
+- ScholarBot/RegBot integrated into marketplace-centric IA.
 
-### Handoff Needed
-- Dev 2: stable scholarship/monitor/pending/log query contracts after Phase 3 freeze.
-- Dev 3: webhook status mapping and screenshot metadata format.
+### Phase 5: UI Polish + Dev4 Defect Closure
+**Objective:** Close release-blocking UI issues from Dev 4 reports.
+
+**Tasks**
+1. Fix Sev-1 and Sev-2 defects tied to marketplace/my-agents/studio scenarios.
+2. Improve responsiveness and edge-state messaging.
+3. Re-verify all scenario IDs with Dev 4 fixture packs.
+
+**Deliverables**
+- Final UI defect closure log and release-candidate signoff input.
+
+**Acceptance Criteria**
+- No open release-blocking UI defects for required scenarios.
 
 ---
 
-## Phase 4: FlowForge + Settings
-**Objective:** Implement should-have UX for custom workflow creation and credentials/settings.
+## 5) Dependencies and Handoffs
 
-### Tasks
-1. FlowForge page:
-   - Natural language input with examples.
-   - Preview confirmation card from generated workflow interpretation.
-   - Deploy, pause, edit, delete controls tied to workflow contracts.
-2. Settings page:
-   - Profile editor (reuse onboarding schemas where possible).
-   - Credential vault UX (encryption indicators, never display secrets in plain text).
-   - Notification preference controls.
-3. Display custom workflow results/log snippets on page.
-
-### Deliverables
-- End-to-end UI flow for prompt -> preview -> deploy.
-- Settings sections visible and functional.
-
-### Acceptance Criteria
-- FlowForge generates preview and submits deployment request.
-- User can manage workflow lifecycle states from UI.
-
-### Tests
-- FlowForge form validation and preview confirmation.
-- Settings save and reload behavior.
-
-### Handoff Needed
-- Dev 2: `customWorkflows` and settings persistence contracts.
-- Dev 3: preview text + run-result payload structure.
-
----
-
-## Phase 5: Polish + Demo Mode
-**Objective:** Hardening and presentation readiness for live demo.
-
-### Tasks
-1. Add comprehensive loading/empty/error UX across all panels.
-2. Ensure mobile-responsive layout (minimum acceptable).
-3. Implement demo mode toggles:
-   - Use mock fallback payloads when integrations are unavailable.
-   - Visually indicate demo fallback state.
-4. Perform visual consistency pass and accessibility pass (focus states, labels).
-5. Clean console warnings and remove dead UI code.
-
-### Deliverables
-- Demo-ready UI with fallback behavior.
-- Updated known issues with residual risks and workarounds.
-- Final frontend acceptance checklist marked complete.
-
-### Acceptance Criteria
-- Full UI demo runs even if one external system is degraded.
-- No blocking TS/build errors.
-- Core views usable on desktop and mobile.
-
----
-
-## 6) Data Dependencies by Phase (Dev 2 + Dev 3)
-
-| Phase | Needs from Dev 2 | Needs from Dev 3 |
+| Phase | Input Needed | Owner |
 |---|---|---|
-| 0 | provisional function names | provisional event states |
-| 1 | `users.getProfile`, `users.upsertProfile` schema | none |
-| 2 | `dashboard.getOverview` payload shape | run event list for feed |
-| 3 | scholarship/monitor/pending/log contracts | screenshot metadata + run-state mapping |
-| 4 | workflow/settings contracts | preview + generated-script status payloads |
-| 5 | stable prod-like payloads for demo mode | replay payloads for fallback demo |
+| 0 | typed API signatures + event taxonomy | Dev 2 + Dev 3 |
+| 1 | marketplace list/detail/install payloads | Dev 2 |
+| 2 | run-now/schedule/delete semantics + logs payload | Dev 2 + Dev 3 |
+| 3 | Studio generation/deploy status payloads | Dev 3 |
+| 4 | template-source mapping for first-party templates | Dev 2 |
+| 5 | defect queue and pass/fail gates | Dev 4 |
 
 ---
 
-## 7) Frontend Definition of Done (Final)
+## 6) Dev 1 Test Responsibilities
 
-1. All core routes and panels run and are integrated.
-2. Must-have UI flows are connected to backend stubs/live functions.
-3. No blocking TypeScript errors; local build is stable.
-4. Mobile layout is acceptable for demo and judge interaction.
-5. Known issues log documents non-blocking defects and mitigations.
+1. Route/render tests for Marketplace, My Agents, Studio.
+2. Marketplace tab/filter/install and submission badge-state tests.
+3. My Agents control action UX tests (run now/schedule/delete).
+4. Studio prompt-preview-deploy flow rendering tests.
+5. Regression checks against Dev 4 fixture payloads.
 
 ---
 
-## 8) Escalation and Blocker Playbook
+## 7) Definition of Done
 
-When blocked more than 20 minutes:
-1. Post blocker note with:
-   - `Issue`
-   - `Dependency Owner (Dev 2 or Dev 3)`
-   - `Needed by time`
-   - `Fallback path`
-2. Activate fallback:
-   - Use local type-safe mocks.
-   - Keep UI integration points unchanged.
-3. Re-sync at next 30-minute checkpoint and either:
-   - Replace mocks with real contracts, or
-   - Lock fallback for demo and document limitation.
+1. Marketplace UI supports dev and student template flows.
+2. My Agents supports all required operational controls.
+3. Model-to-Agent Studio UX is functional and aligned with naming policy.
+4. All freeze-stamped contracts are respected with no release-blocking UI drift.
 
+---
+
+## 8) Escalation Protocol
+
+If blocked >20 minutes:
+1. Publish blocker with scenario ID and dependency owner.
+2. Use typed fixture fallback only if contract owner is unavailable.
+3. Notify Dev 4 so release-risk board stays current.
