@@ -158,6 +158,43 @@ const demoTemplates: DemoTemplateSeed[] = [
       timezone: "America/Chicago",
     },
   },
+  {
+    title: "Study Abroad Bot",
+    description:
+      "Tracks program deadlines, required forms, and country-specific steps so students can stay ahead of study abroad planning.",
+    source: "student",
+    category: "Campus life",
+    visibility: "public",
+    templateType: "custom",
+    installCount: 41,
+    cadenceLabel: "Twice weekly check-in",
+    setupFields: ["Target region", "Program interests", "Deadline reminders"],
+    outcomes: ["Program tracking", "Form reminders", "Timeline digest"],
+    defaultSchedule: {
+      enabled: true,
+      cron: "0 8 * * 2,5",
+      timezone: "America/Chicago",
+    },
+    approvedAt: NOW - 1000 * 60 * 60 * 24 * 10,
+  },
+  {
+    title: "Intramural Sports Bot",
+    description:
+      "Watches intramural registration windows, roster deadlines, and open league spots for students joining campus sports.",
+    source: "student",
+    category: "Campus life",
+    visibility: "public",
+    templateType: "custom",
+    installCount: 33,
+    cadenceLabel: "Daily during registration season",
+    setupFields: ["Sports interests", "League level", "Preferred reminders"],
+    outcomes: ["Registration tracking", "Roster reminders", "Open spot alerts"],
+    defaultSchedule: {
+      enabled: true,
+      cron: "0 9 * * *",
+      timezone: "America/Chicago",
+    },
+  },
 ];
 
 const semesterOptions = [

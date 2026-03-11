@@ -4,7 +4,7 @@ import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { createContext, useContext, type ReactNode, useMemo } from "react";
 
 const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL;
-const FALLBACK_CONVEX_URL = "https://placeholder.convex.cloud";
+const PLACEHOLDER_CONVEX_URL = "https://placeholder.convex.cloud";
 
 const ConvexModeContext = createContext<boolean>(false);
 
@@ -15,7 +15,7 @@ export function useConvexMode(): boolean {
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   const client = useMemo(() => {
-    return new ConvexReactClient(CONVEX_URL ?? FALLBACK_CONVEX_URL);
+    return new ConvexReactClient(CONVEX_URL ?? PLACEHOLDER_CONVEX_URL);
   }, []);
 
   return (

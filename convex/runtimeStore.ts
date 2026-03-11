@@ -3,6 +3,7 @@ import type {
   AgentRecord,
   IntramuralSignupRecord,
   LabOpeningRecord,
+  JsonObject,
   MarketplaceTemplateRecord,
   PendingActionRecord,
   RegistrationMonitorRecord,
@@ -46,12 +47,21 @@ const store: RuntimeStore = {
   idCounters: new Map(),
 };
 
-function nowIso(): string {
-  return new Date().toISOString();
+function nowTimestamp(): number {
+  return Date.now();
+}
+
+function createTemplateConfig(defaultConfig: JsonObject): MarketplaceTemplateRecord["templateConfig"] {
+  return {
+    schemaVersion: "1.0.0",
+    inputSchema: {},
+    defaultConfig,
+    currentConfig: defaultConfig,
+  };
 }
 
 function seedTemplates(): void {
-  const ts = Date.now();
+  const ts = nowTimestamp();
   const baseTemplates: MarketplaceTemplateRecord[] = [
     {
       id: SCHOLARBOT_TEMPLATE_ID,
@@ -61,36 +71,14 @@ function seedTemplates(): void {
       visibility: "public",
       category: "scholarships",
       installCount: 0,
-      templateConfig: {
-        schemaVersion: "v1",
-        inputSchema: {
-          fields: [
-            { key: "sources", label: "Scholarship Sources", type: "multiselect" },
-            { key: "profile", label: "Student Profile", type: "object" },
-          ],
+      templateConfig: createTemplateConfig({
+        sources: ["UT Scholarships", "FastWeb"],
+        requireEssay: true,
+        profile: {
+          major: "CS",
+          classification: "Undergraduate",
         },
-        defaultConfig: {
-          sources: ["UT Scholarships", "FastWeb"],
-          requireEssay: true,
-          profile: {
-            major: "CS",
-            classification: "Undergraduate",
-          },
-        },
-        currentConfig: {
-          sources: ["UT Scholarships", "FastWeb"],
-          requireEssay: true,
-          profile: {
-            major: "CS",
-            classification: "Undergraduate",
-          },
-        },
-        defaultSchedule: {
-          enabled: true,
-          cron: "0 8 * * *",
-          timezone: "America/Chicago",
-        },
-      },
+      }),
       templateType: "scholar",
       createdAt: ts,
       updatedAt: ts,
@@ -103,52 +91,14 @@ function seedTemplates(): void {
       visibility: "public",
       category: "registration",
       installCount: 0,
-      templateConfig: {
-        schemaVersion: "v1",
-        inputSchema: {
-          fields: [
-            { key: "semester", label: "Semester", type: "text" },
-            { key: "watchList", label: "Watched Sections", type: "array" },
-            { key: "autoRegister", label: "Auto-register", type: "boolean" },
-          ],
-        },
-        defaultConfig: {
-          semester: "Fall 2026",
-          autoRegister: true,
-          pollIntervalMinutes: 10,
-          duoTimeoutAttempts: 0,
-          watchList: [
-            {
-              courseNumber: "CS 378",
-              uniqueId: "12345",
-              semester: "Fall 2026",
-              autoRegister: true,
-              seatAvailableOnAttempt: 1,
-            },
-          ],
-        },
-        currentConfig: {
-          semester: "Fall 2026",
-          autoRegister: true,
-          pollIntervalMinutes: 10,
-          duoTimeoutAttempts: 0,
-          watchList: [
-            {
-              courseNumber: "CS 378",
-              uniqueId: "12345",
-              semester: "Fall 2026",
-              autoRegister: true,
-              seatAvailableOnAttempt: 1,
-            },
-          ],
-        },
-        defaultSchedule: {
-          enabled: true,
-          cron: "*/10 * * * *",
-          timezone: "America/Chicago",
-          jitterMinutes: 2,
-        },
-      },
+      templateConfig: createTemplateConfig({
+        semester: "Fall 2026",
+        courseNumber: "CS 378",
+        uniqueId: "12345",
+        pollIntervalMinutes: 10,
+        seatAvailableOnAttempt: 1,
+        duoTimeoutAttempts: 0,
+      }),
       templateType: "reg",
       createdAt: ts,
       updatedAt: ts,
@@ -161,45 +111,18 @@ function seedTemplates(): void {
       visibility: "public",
       category: "research",
       installCount: 0,
-      templateConfig: {
-        schemaVersion: "v1",
-        inputSchema: {
-          fields: [
-            { key: "sources", label: "Lab Listing Sources", type: "multiselect" },
-            { key: "profile", label: "Student Profile", type: "object" },
-          ],
+      templateConfig: createTemplateConfig({
+        sources: ["Eureka", "UT Research Portal"],
+        profile: {
+          name: "UT Student",
+          major: "Computer Science",
+          classification: "Undergraduate",
+          gpa: "3.8",
+          researchInterests: ["machine learning", "systems"],
+          relevantCourses: ["CS 429 Computer Organization", "CS 439 Operating Systems", "CS 378 Machine Learning"],
+          skills: ["Python", "PyTorch", "C++", "Linux"],
         },
-        defaultConfig: {
-          sources: ["Eureka", "UT Research Portal"],
-          profile: {
-            name: "UT Student",
-            major: "Computer Science",
-            classification: "Undergraduate",
-            gpa: "3.8",
-            researchInterests: ["machine learning", "systems"],
-            relevantCourses: ["CS 429 Computer Organization", "CS 439 Operating Systems", "CS 378 Machine Learning"],
-            skills: ["Python", "PyTorch", "C++", "Linux"],
-          },
-        },
-        currentConfig: {
-          sources: ["Eureka", "UT Research Portal"],
-          profile: {
-            name: "UT Student",
-            major: "Computer Science",
-            classification: "Undergraduate",
-            gpa: "3.8",
-            researchInterests: ["machine learning", "systems"],
-            relevantCourses: ["CS 429 Computer Organization", "CS 439 Operating Systems", "CS 378 Machine Learning"],
-            skills: ["Python", "PyTorch", "C++", "Linux"],
-          },
-        },
-        defaultSchedule: {
-          enabled: true,
-          cron: "0 9 * * 1,3,5",
-          timezone: "America/Chicago",
-          jitterMinutes: 10,
-        },
-      },
+      }),
       templateType: "eureka",
       createdAt: ts,
       updatedAt: ts,
@@ -212,35 +135,13 @@ function seedTemplates(): void {
       visibility: "public",
       category: "intramurals",
       installCount: 0,
-      templateConfig: {
-        schemaVersion: "v1",
-        inputSchema: {
-          fields: [
-            { key: "sports", label: "Sports", type: "multiselect" },
-            { key: "division", label: "Division", type: "text" },
-            { key: "role", label: "Role", type: "text" },
-          ],
-        },
-        defaultConfig: {
-          sports: ["Basketball", "Flag Football", "Soccer"],
-          division: "C",
-          role: "free_agent",
-          preferredDays: ["Sunday", "Tuesday", "Thursday"],
-          preferredTime: "evening",
-        },
-        currentConfig: {
-          sports: ["Basketball", "Flag Football", "Soccer"],
-          division: "C",
-          role: "free_agent",
-          preferredDays: ["Sunday", "Tuesday", "Thursday"],
-          preferredTime: "evening",
-        },
-        defaultSchedule: {
-          enabled: true,
-          cron: "0 8 * * 1",
-          timezone: "America/Chicago",
-        },
-      },
+      templateConfig: createTemplateConfig({
+        sports: ["Basketball", "Flag Football", "Soccer"],
+        division: "C",
+        role: "free_agent",
+        preferredDays: ["Sunday", "Tuesday", "Thursday"],
+        preferredTime: "evening",
+      }),
       templateType: "im",
       createdAt: ts,
       updatedAt: ts,
@@ -253,23 +154,9 @@ function seedTemplates(): void {
       visibility: "public",
       category: "custom",
       installCount: 0,
-      templateConfig: {
-        schemaVersion: "v1",
-        inputSchema: {
-          fields: [],
-        },
-        defaultConfig: {
-          dryRunOnly: true,
-        },
-        currentConfig: {
-          dryRunOnly: true,
-        },
-        defaultSchedule: {
-          enabled: false,
-          cron: "",
-          timezone: "America/Chicago",
-        },
-      },
+      templateConfig: createTemplateConfig({
+        dryRunOnly: true,
+      }),
       templateType: "custom",
       createdAt: ts,
       updatedAt: ts,

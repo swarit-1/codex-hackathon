@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import type {
   Agent,
   AgentEvent,
@@ -280,6 +281,100 @@ export function MarketplaceCard({
         )}
         <Link className="button-link secondary" href={`/marketplace#${template.id}`}>
           View details
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+export function MarketplaceHero() {
+  return (
+    <div className="market-banner">
+      <div className="market-banner-copy">
+        <h1>Favorites of 2026</h1>
+        <p>Find official UT student workflows and community-built tools in one place.</p>
+        <Link className="banner-link" href="/studio">
+          Build a workflow
+        </Link>
+      </div>
+      <div className="market-banner-art" aria-hidden="true">
+        <div className="banner-block trophy" />
+        <div className="banner-block spark" />
+        <div className="banner-block ribbon" />
+      </div>
+    </div>
+  );
+}
+
+export function MarketplaceSidebar({
+  options,
+  activeValue,
+  onChange,
+}: {
+  options: FilterOption[];
+  activeValue: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <aside className="market-sidebar" aria-label="Marketplace categories">
+      <nav className="sidebar-nav">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            aria-pressed={activeValue === option.value}
+            className={activeValue === option.value ? "sidebar-link active" : "sidebar-link"}
+            onClick={() => onChange(option.value)}
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
+export function MarketplaceTile({
+  template,
+}: {
+  template: MarketplaceTemplate;
+}) {
+  const sourceLabel = template.source === "dev" ? "Official" : "Student-built";
+  const installLabel = `${template.installs.toLocaleString()} installs`;
+
+  return (
+    <article className="store-tile" id={template.id}>
+      <div className="tile-preview">
+        {template.imageSrc ? (
+          <Image
+            alt={`${template.title} artwork`}
+            className="tile-image"
+            fill
+            sizes="(max-width: 820px) 100vw, (max-width: 1100px) 50vw, 25vw"
+            src={template.imageSrc}
+          />
+        ) : (
+          <div className={`tile-logo ${template.iconKey}`}>
+            <span>{template.iconGlyph}</span>
+          </div>
+        )}
+        <div className="tile-preview-fill" />
+      </div>
+      <div className="store-tile-body">
+        <h3>{template.title}</h3>
+        <div className="store-meta">
+          <span className={`store-tag ${template.source}`}>{sourceLabel}</span>
+          <span className="store-tag neutral">{installLabel}</span>
+          <span className="store-tag neutral">{template.category}</span>
+        </div>
+        <p>{template.description}</p>
+      </div>
+      <div className="tile-actions">
+        <Link className="button-link tile-button" href="/my-agents">
+          Install
+        </Link>
+        <Link className="catalog-link" href={`/marketplace#${template.id}`}>
+          Details
         </Link>
       </div>
     </article>
