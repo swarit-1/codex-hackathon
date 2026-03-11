@@ -1,7 +1,11 @@
+"use client";
+
 import { AppShell, SectionHeading, StudioQueue } from "../../components/shared";
-import { studioDrafts } from "../../lib/contracts/mock-data";
+import { useStudioDrafts } from "../../lib/hooks";
 
 export default function StudioPage() {
+  const { drafts } = useStudioDrafts();
+
   return (
     <AppShell currentPath="/studio">
       <section className="studio-layout">
@@ -52,8 +56,10 @@ export default function StudioPage() {
         <SectionHeading
           title="Current drafts"
           description="Generated workflows should remain visible after creation so students can refine, deploy, or publish them later."
+          actionHref="/my-agents"
+          actionLabel="Check deployed agents"
         />
-        <StudioQueue drafts={studioDrafts} />
+        <StudioQueue drafts={drafts} />
       </section>
     </AppShell>
   );
