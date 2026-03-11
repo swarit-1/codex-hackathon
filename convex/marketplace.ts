@@ -1,6 +1,5 @@
 import { mutation, query } from "./_generated/server";
 import {
-  deleteDoc,
   getDoc,
   insertDoc,
   patchDoc,
@@ -30,11 +29,10 @@ import {
   marketplaceTemplateFilterArgs,
 } from "./lib/validators";
 import {
-  assertCanManageSubmission,
+  assertCanManageTemplate,
   assertCanReadTemplate,
   assertModerator,
   assertUserOwnsResource,
-  requireUser,
   resolveActingUserId,
 } from "./security/authz";
 import type {
@@ -121,7 +119,8 @@ export const getTemplate = query({
 export const installTemplate = mutation({
   args: marketplaceInstallTemplateArgs,
   handler: async (ctx, args): Promise<TemplateInstallResult> => {
-    await requireUser(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const templateDoc = await getDoc<Omit<MarketplaceTemplateRecord, "id">>(ctx, args.templateId);
 
@@ -132,7 +131,7 @@ export const installTemplate = mutation({
     }
 
     const template = toMarketplaceTemplateRecord(templateDoc as any);
-    await assertCanReadTemplate(ctx, template, args.userId);
+    await assertCanReadTemplate(ctx, template, actingUserId ?? args.userId);
 
     if (isTemplateArchived(template)) {
       throw invalidStateError("archived templates cannot be installed", {
@@ -221,7 +220,8 @@ export const installTemplate = mutation({
 export const submitTemplate = mutation({
   args: marketplaceSubmitTemplateArgs,
   handler: async (ctx, args): Promise<TemplateSubmissionRecord> => {
-    await requireUser(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     if (args.templateId) {
       const templateDoc = await getDoc<Omit<MarketplaceTemplateRecord, "id">>(ctx, args.templateId);
@@ -232,7 +232,11 @@ export const submitTemplate = mutation({
         });
       }
 
-      await assertCanReadTemplate(ctx, toMarketplaceTemplateRecord(templateDoc as any), args.userId);
+      await assertCanManageTemplate(
+        ctx,
+        toMarketplaceTemplateRecord(templateDoc as any),
+        actingUserId ?? args.userId
+      );
     }
 
     const pendingSubmissions = await queryByIndex<Omit<TemplateSubmissionRecord, "id">>(
@@ -281,6 +285,8 @@ export const submitTemplate = mutation({
 export const reviewSubmission = mutation({
   args: marketplaceReviewSubmissionArgs,
   handler: async (ctx, args): Promise<TemplateReviewResult> => {
+    const actingUserId = await resolveActingUserId(ctx, args.reviewerId);
+    await assertUserOwnsResource(ctx, actingUserId, args.reviewerId);
     await assertModerator(ctx, args.reviewerId);
 
     const submissionDoc = await getDoc<Omit<TemplateSubmissionRecord, "id">>(ctx, args.submissionId);

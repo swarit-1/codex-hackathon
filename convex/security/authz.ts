@@ -1,4 +1,4 @@
-import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
 import { getDoc } from "../lib/db";
 import { forbiddenError, notFoundError } from "../lib/errors";
 import type {
@@ -8,7 +8,7 @@ import type {
   UserProfileRecord,
 } from "../types/contracts";
 
-type ConvexCtx = QueryCtx | MutationCtx;
+type ConvexCtx = QueryCtx | MutationCtx | ActionCtx;
 type UserDoc = Omit<UserProfileRecord, "id"> & {
   _id: string;
   profileData?: Record<string, unknown>;
@@ -84,6 +84,22 @@ function getRoleSet(user: UserDoc): Set<string> {
   return roles;
 }
 
+async function assertHasElevatedRole(
+  ctx: ConvexCtx,
+  userId: string,
+  message: string,
+  metadata?: Record<string, unknown>
+): Promise<UserDoc> {
+  const user = await requireUser(ctx, userId);
+  const roles = getRoleSet(user);
+
+  if (!roles.has("moderator") && !roles.has("admin")) {
+    throw forbiddenError(message, metadata);
+  }
+
+  return user;
+}
+
 export async function requireUser(ctx: ConvexCtx, userId: string): Promise<UserDoc> {
   return getUserDoc(ctx, userId);
 }
@@ -94,6 +110,26 @@ export async function resolveActingUserId(
 ): Promise<string | undefined> {
   const authIdentity = await getAuthIdentity(ctx);
   return extractUserIdFromIdentity(authIdentity) ?? fallbackUserId;
+}
+
+export async function assertCanActForUserId(
+  ctx: ConvexCtx,
+  actingUserId: string | undefined,
+  targetUserId: string
+): Promise<void> {
+  if (!actingUserId || actingUserId === targetUserId) {
+    return;
+  }
+
+  await assertHasElevatedRole(
+    ctx,
+    actingUserId,
+    "user cannot act on behalf of another user",
+    {
+      actingUserId,
+      targetUserId,
+    }
+  );
 }
 
 export async function assertUserOwnsResource(
@@ -107,7 +143,9 @@ export async function assertUserOwnsResource(
 
   const actingUser = await requireUser(ctx, actingUserId);
 
-  if (actingUserId !== ownerUserId && !getRoleSet(actingUser).has("moderator")) {
+  const roles = getRoleSet(actingUser);
+
+  if (actingUserId !== ownerUserId && !roles.has("moderator") && !roles.has("admin")) {
     throw forbiddenError("user cannot access resource owned by another user", {
       actingUserId,
       ownerUserId,
@@ -118,16 +156,14 @@ export async function assertUserOwnsResource(
 }
 
 export async function assertModerator(ctx: ConvexCtx, reviewerId: string): Promise<UserDoc> {
-  const reviewer = await requireUser(ctx, reviewerId);
-  const roles = getRoleSet(reviewer);
-
-  if (!roles.has("moderator") && !roles.has("admin")) {
-    throw forbiddenError("review action requires moderator role", {
+  return assertHasElevatedRole(
+    ctx,
+    reviewerId,
+    "review action requires moderator role",
+    {
       reviewerId,
-    });
-  }
-
-  return reviewer;
+    }
+  );
 }
 
 export async function assertCanReadTemplate(
@@ -145,7 +181,39 @@ export async function assertCanReadTemplate(
     });
   }
 
-  await assertUserOwnsResource(ctx, actingUserId, template.ownerUserId ?? actingUserId);
+  if (template.ownerUserId) {
+    await assertUserOwnsResource(ctx, actingUserId, template.ownerUserId);
+    return;
+  }
+
+  await assertHasElevatedRole(
+    ctx,
+    actingUserId,
+    "private or archived template requires owner or moderator access",
+    {
+      templateId: template.id,
+    }
+  );
+}
+
+export async function assertCanManageTemplate(
+  ctx: ConvexCtx,
+  template: MarketplaceTemplateRecord,
+  actingUserId: string
+): Promise<void> {
+  if (template.ownerUserId) {
+    await assertUserOwnsResource(ctx, actingUserId, template.ownerUserId);
+    return;
+  }
+
+  await assertHasElevatedRole(
+    ctx,
+    actingUserId,
+    "template management requires owner or moderator access",
+    {
+      templateId: template.id,
+    }
+  );
 }
 
 export async function assertCanManageSubmission(

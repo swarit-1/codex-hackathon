@@ -9,7 +9,7 @@ export interface MutationCtx extends QueryCtx {
   scheduler: unknown;
 }
 
-export interface ActionCtx {
+export interface ActionCtx extends QueryCtx {
   runQuery: unknown;
   runMutation: unknown;
   runAction: unknown;

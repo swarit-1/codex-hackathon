@@ -25,9 +25,9 @@
 
 ### Placeholder Behavior
 
-- [x] list queries return `{ items: [], nextCursor: null }`
-- [x] single-record queries return `null`
-- [x] mutations and runtime actions throw deterministic `PHASE_2_NOT_IMPLEMENTED`
+- [x] list queries return `{ items, nextCursor }` pagination envelopes
+- [x] single-record queries return `null` on missing resources where appropriate
+- [x] Phase 2 handlers use real Convex reads and writes instead of placeholder mutations
 
 ## Phase 1: Marketplace Schema Freeze
 
@@ -88,10 +88,10 @@
 
 ### Remaining Integration Work
 
-- [ ] wire `agents.updateSchedule` to persist normalized schedules and emit operation events
-- [ ] wire `agents.runNow` to prepare runtime handoff payloads and emit operation events
-- [ ] wire `agents.delete` to apply safe delete mode semantics
-- [ ] wire `orchestrator.handleWebhook` to reconcile runtime callbacks using shared trace IDs
+- [x] wire `agents.updateSchedule` to persist normalized schedules and emit operation events
+- [x] wire `agents.runNow` to prepare runtime handoff payloads and emit operation events
+- [x] wire `agents.delete` to apply safe delete mode semantics
+- [x] wire `orchestrator.handleWebhook` to reconcile runtime callbacks using shared trace IDs
 
 ## Phase 5: Observability and Fixture Pack
 
@@ -105,6 +105,6 @@
 ### Remaining Integration Work
 
 - [ ] expose fixture helpers to Dev 4 through test utilities or deterministic backend entrypoints
-- [ ] emit scenario-tagged logs from real runtime and moderation flows
-- [ ] standardize all handler failures on the shared backend error taxonomy
+- [ ] emit scenario-tagged logs from real runtime and moderation flows where deterministic scenarios exist
+- [x] standardize all handler failures on the shared backend error taxonomy
 - [ ] validate payload docs against live handler/runtime behavior once Phase 2-4 implementation lands

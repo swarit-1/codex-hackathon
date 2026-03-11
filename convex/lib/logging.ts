@@ -1,4 +1,4 @@
-import type { MutationCtx } from "../_generated/server";
+import type { ActionCtx, MutationCtx } from "../_generated/server";
 import type {
   AgentLogRecord,
   JsonValue,
@@ -8,7 +8,7 @@ import type {
 import { insertDoc } from "./db";
 
 export async function appendAgentLog(
-  ctx: MutationCtx,
+  ctx: MutationCtx | ActionCtx,
   args: {
     agentId: string;
     event: string;

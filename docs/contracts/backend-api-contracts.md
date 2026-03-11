@@ -1,9 +1,15 @@
 # Backend API Contracts
 
-## Phase 1 Freeze Scope
+## Current Scope
 
-Phase 1 locks the durable record shapes and index-backed read patterns for the marketplace-first
-information architecture. It does not implement marketplace or agent-operation mutations yet.
+The backend now has:
+
+- Phase 1 schema and index freeze in source
+- Phase 2 real Convex-backed reads and writes for user, marketplace, agent, workflow, monitor,
+  scholarship, log, and pending-action handlers
+- Phase 3 authorization and credential-vault handling foundations
+- Phase 4 runtime handoff and webhook reconciliation helpers
+- Phase 5 deterministic fixture and observability contracts
 
 ## Canonical Enums
 
@@ -22,11 +28,10 @@ information architecture. It does not implement marketplace or agent-operation m
 
 - All backend handlers accept a single object argument.
 - List handlers return `{ items: T[]; nextCursor: string | null }`.
-- Write mutations and runtime actions are intentionally scaffolded with deterministic
-  `PHASE_2_NOT_IMPLEMENTED` errors until Phase 2 business logic lands.
 - `schedule` is always persisted as `{ enabled, cron, timezone, jitterMinutes? }`.
 - template and agent config stay in the envelope
   `{ schemaVersion, inputSchema, defaultConfig, defaultSchedule?, currentConfig? }`.
+- ownership and moderation checks are enforced in handler code, not inferred by the caller.
 
 ## Phase 4-5 Shared Runtime Contracts
 
@@ -146,7 +151,7 @@ information architecture. It does not implement marketplace or agent-operation m
 
 - `userId: Id<"users">`
 - `templateId?: Id<"marketplaceTemplates">`
-- `draftPayload: { schemaVersion, inputSchema, defaultConfig, defaultSchedule?, currentConfig? }`
+- `draftPayload: { title, description, category, templateType, visibility?, templateConfig }`
 - `status: SubmissionStatus`
 - `reviewerId?: Id<"users">`
 - `reviewNotes?: string`
@@ -215,6 +220,21 @@ information architecture. It does not implement marketplace or agent-operation m
 - scheduler reads use `agents.by_status_nextRunAt`
 - template lineage and install lookup use `agents.by_templateId`
 - list responses use the shared paginated shape `{ items, nextCursor }`
+
+## Runtime Action Behavior
+
+- `flowforge.generateWorkflowSpec({ nlDescription })`
+  - returns a deterministic Model-to-Agent Studio spec and private template draft payload
+- `flowforge.generateAgentScript({ spec })`
+  - returns a deterministic script stub with a stable checksum
+- `orchestrator.triggerAgentRun({ agentId, runType })`
+  - marks the agent as running when not already running
+  - emits traceable operation and handoff log entries
+- `orchestrator.handleWebhook({ eventPayload })`
+  - reconciles `lastRunStatus`, lifecycle status, `nextRunAt`, and appends webhook logs
+  - ignores duplicate webhook events based on `event + occurredAt + traceId`
+- `orchestrator.resumeFromPendingAction({ actionId })`
+  - requires a resolved pending action before resuming runtime handoff
 
 ## Lifecycle Defaults
 

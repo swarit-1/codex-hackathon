@@ -1,6 +1,6 @@
-import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
 
-type ConvexCtx = QueryCtx | MutationCtx;
+type ConvexCtx = QueryCtx | MutationCtx | ActionCtx;
 
 export interface ConvexDoc<T extends Record<string, unknown>> extends T {
   _id: string;

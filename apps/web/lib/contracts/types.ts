@@ -10,6 +10,19 @@ export type AgentType = "scholar" | "reg" | "custom";
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
 export type AuthMethod = "email" | "ut_sso" | "demo";
 export type LogLevel = "info" | "warning" | "error";
+export type RuntimeRunType = "manual" | "scheduled" | "resume";
+export type RunTriggerSource = "my_agents" | "scheduler" | "pending_action" | "webhook";
+export type ScenarioId =
+  | "scholarbot_happy_path"
+  | "regbot_happy_path"
+  | "flowforge_happy_path"
+  | "regbot_duo_timeout"
+  | "webhook_retry_path"
+  | "marketplace_install_dev_template"
+  | "marketplace_install_student_template"
+  | "submission_pending_to_approved"
+  | "my_agents_run_now"
+  | "my_agents_schedule_update";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -127,40 +140,46 @@ export interface TemplateReviewResult {
   template?: MarketplaceTemplateRecord;
 }
 
+export interface AgentOperationEvent {
+  agentId: string;
+  operation: "run_now" | "schedule_update" | "delete";
+  status: "accepted" | "deferred" | "rejected";
+  message: string;
+  trace: {
+    traceId: string;
+    emittedAt: number;
+    source: RunTriggerSource;
+    scenarioId?: ScenarioId;
+  };
+  metadata?: JsonObject;
+}
+
+export interface RuntimeHandoffPayload {
+  agentId: string;
+  runType: RuntimeRunType;
+  source: RunTriggerSource;
+  requestedAt: number;
+  traceId: string;
+  requestedByUserId?: string;
+  scenarioId?: ScenarioId;
+  schedule?: ScheduleConfig;
+  metadata?: JsonObject;
+}
+
 export interface AgentRunNowResult {
   agent: AgentRecord;
-  operationEvent: {
-    agentId: string;
-    operation: "run_now" | "schedule_update" | "delete";
-    status: "accepted" | "deferred" | "rejected";
-    message: string;
-    trace: {
-      traceId: string;
-      emittedAt: number;
-      source: "my_agents" | "scheduler" | "pending_action" | "webhook";
-      scenarioId?: ScenarioId;
-    };
-  };
-  handoffPayload: {
-    agentId: string;
-    runType: "manual" | "scheduled" | "resume";
-    source: "my_agents" | "scheduler" | "pending_action" | "webhook";
-    requestedAt: number;
-    traceId: string;
-    requestedByUserId?: string;
-    scenarioId?: ScenarioId;
-    schedule?: ScheduleConfig;
-  };
+  operationEvent: AgentOperationEvent;
+  handoffPayload: RuntimeHandoffPayload;
   alreadyRunning: boolean;
 }
 
 export interface AgentScheduleUpdateResult {
   agent: AgentRecord;
-  operationEvent: AgentRunNowResult["operationEvent"];
+  operationEvent: AgentOperationEvent;
 }
 
 export interface AgentDeleteResult {
   deletedAgentId: string;
   deleteMode: "archive_only" | "cancel_then_archive";
-  operationEvent: AgentRunNowResult["operationEvent"];
+  operationEvent: AgentOperationEvent;
 }

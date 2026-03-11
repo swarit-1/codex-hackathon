@@ -30,10 +30,9 @@ import {
   agentUpdateStatusArgs,
 } from "./lib/validators";
 import {
+  assertUserOwnsResource,
   assertCanManageAgent,
   assertCanReadTemplate,
-  assertUserOwnsResource,
-  requireUser,
   resolveActingUserId,
 } from "./security/authz";
 import type {
@@ -70,7 +69,8 @@ async function deleteByAgentId(ctx: any, table: string, agentId: string): Promis
 export const create = mutation({
   args: agentCreateArgs,
   handler: async (ctx, args): Promise<AgentRecord> => {
-    await requireUser(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const timestamp = Date.now();
     let ownerType = args.ownerType ?? "generated";
@@ -88,7 +88,7 @@ export const create = mutation({
       }
 
       const template = toMarketplaceTemplateRecord(templateDoc as any);
-      await assertCanReadTemplate(ctx, template, args.userId);
+      await assertCanReadTemplate(ctx, template, actingUserId ?? args.userId);
 
       ownerType = args.ownerType ?? deriveAgentOwnerType(template.source);
       type = template.templateType;

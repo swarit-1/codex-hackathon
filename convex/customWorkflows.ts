@@ -8,7 +8,7 @@ import {
 } from "./lib/validators";
 import {
   assertCanManageAgent,
-  requireUser,
+  assertUserOwnsResource,
   resolveActingUserId,
 } from "./security/authz";
 import type { AgentRecord, CustomWorkflowRecord } from "./types/contracts";
@@ -16,7 +16,8 @@ import type { AgentRecord, CustomWorkflowRecord } from "./types/contracts";
 export const create = mutation({
   args: customWorkflowCreateArgs,
   handler: async (ctx, args): Promise<CustomWorkflowRecord> => {
-    await requireUser(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     if (args.agentId) {
       const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
@@ -28,7 +29,6 @@ export const create = mutation({
       }
 
       const agent = toAgentRecord(agentDoc as any);
-      const actingUserId = await resolveActingUserId(ctx, args.userId);
       await assertCanManageAgent(ctx, agent, actingUserId ?? args.userId);
     }
 

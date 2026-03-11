@@ -304,6 +304,17 @@ export const agentLogAppendArgs = {
   scenarioId: v.optional(scenarioIdValidator),
 };
 
+export const runtimeWebhookPayloadValidator = v.object({
+  agentId: v.id("agents"),
+  event: v.string(),
+  status: agentRunStatusValidator,
+  occurredAt: v.number(),
+  traceId: v.string(),
+  runType: v.optional(runtimeRunTypeValidator),
+  scenarioId: v.optional(scenarioIdValidator),
+  details: v.optional(v.any()),
+});
+
 export const dashboardGetOverviewArgs = {
   userId: v.id("users"),
 };
@@ -322,7 +333,7 @@ export const orchestratorTriggerAgentRunArgs = {
 };
 
 export const orchestratorHandleWebhookArgs = {
-  eventPayload: v.any(),
+  eventPayload: runtimeWebhookPayloadValidator,
 };
 
 export const orchestratorResumeFromPendingActionArgs = {

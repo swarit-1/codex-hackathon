@@ -1,11 +1,17 @@
 import { mutation, query } from "./_generated/server";
 import { getDoc, insertDoc, patchDoc, queryByIndex } from "./lib/db";
+import { validationError } from "./lib/errors";
 import { userProfileGetArgs, userProfileUpsertArgs } from "./lib/validators";
 import { toUserProfileRecord } from "./lib/records";
 import {
   encryptCredentialVaultInProfileData,
   sanitizeProfileDataForRead,
 } from "./security/encryption";
+import {
+  assertCanActForUserId,
+  assertUserOwnsResource,
+  resolveActingUserId,
+} from "./security/authz";
 import type { JsonObject, UserProfileRecord } from "./types/contracts";
 
 function asJsonObject(value: unknown): JsonObject | undefined {
@@ -19,6 +25,9 @@ function asJsonObject(value: unknown): JsonObject | undefined {
 export const upsertProfile = mutation({
   args: userProfileUpsertArgs,
   handler: async (ctx, args): Promise<UserProfileRecord> => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertCanActForUserId(ctx, actingUserId, args.userId);
+
     const timestamp = Date.now();
     const profileData = encryptCredentialVaultInProfileData(asJsonObject(args.profileData));
 
@@ -56,6 +65,14 @@ export const upsertProfile = mutation({
     );
 
     if (existingByEmail[0]) {
+      if (existingByEmail[0]._id !== args.userId) {
+        throw validationError("email already belongs to a different user", {
+          email: args.email,
+          existingUserId: String(existingByEmail[0]._id),
+          requestedUserId: args.userId,
+        });
+      }
+
       await patchDoc(ctx, existingByEmail[0]._id, {
         name: args.name,
         email: args.email,
@@ -105,6 +122,9 @@ export const upsertProfile = mutation({
 export const getProfile = query({
   args: userProfileGetArgs,
   handler: async (ctx, args): Promise<UserProfileRecord | null> => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
+
     const user = await getDoc<Omit<UserProfileRecord, "id">>(ctx, args.userId);
 
     if (!user) {

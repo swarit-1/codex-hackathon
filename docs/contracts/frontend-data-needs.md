@@ -4,7 +4,7 @@
 
 These fields are guaranteed by the Phase 1 schema for Marketplace browsing:
 
-- `templateId`
+- `id`
 - `title`
 - `description`
 - `source`
@@ -28,7 +28,7 @@ Frontend assumptions:
 
 These fields are guaranteed for template detail and install setup:
 
-- `templateId`
+- `id`
 - all list-card fields
 - `templateConfig.schemaVersion`
 - `templateConfig.inputSchema`
@@ -47,7 +47,7 @@ Frontend assumptions:
 
 These fields are guaranteed for the initial My Agents operational surface:
 
-- `agentId`
+- `id`
 - `userId`
 - `templateId?`
 - `ownerType`
@@ -72,9 +72,13 @@ Frontend assumptions:
 
 These fields are guaranteed for student publish and moderation experiences:
 
-- `submissionId`
+- `id`
 - `userId`
 - `templateId?`
+- `draftPayload.title`
+- `draftPayload.description`
+- `draftPayload.category`
+- `draftPayload.templateType`
 - `status`
 - `reviewNotes?`
 - `createdAt`

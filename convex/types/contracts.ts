@@ -177,6 +177,46 @@ export interface AgentDeleteResult {
   operationEvent: AgentOperationEvent;
 }
 
+export interface FlowforgeWorkflowSpecResult {
+  sourceAlias: WorkflowSourceAlias;
+  scenarioId: ScenarioId;
+  templateType: AgentType;
+  title: string;
+  summary: string;
+  spec: JsonObject;
+  draftPayload: TemplateDraftPayload;
+}
+
+export interface FlowforgeAgentScriptResult {
+  sourceAlias: WorkflowSourceAlias;
+  scenarioId: ScenarioId;
+  script: string;
+  entrypoint: string;
+  checksum: string;
+  spec: JsonValue;
+}
+
+export interface OrchestratorTriggerRunResult {
+  agent: AgentRecord;
+  operationEvent: AgentOperationEvent;
+  handoffPayload: RuntimeHandoffPayload;
+  alreadyRunning: boolean;
+}
+
+export interface OrchestratorWebhookResult {
+  agent: AgentRecord;
+  eventPayload: RuntimeWebhookPayload;
+  duplicateIgnored: boolean;
+}
+
+export interface OrchestratorResumeResult {
+  agent: AgentRecord;
+  pendingAction: PendingActionRecord;
+  operationEvent: AgentOperationEvent;
+  handoffPayload: RuntimeHandoffPayload;
+  alreadyRunning: boolean;
+}
+
 export interface UserProfileRecord {
   id: string;
   name: string;
