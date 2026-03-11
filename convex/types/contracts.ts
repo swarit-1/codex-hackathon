@@ -1,12 +1,14 @@
 export type AgentStatus = "active" | "paused" | "completed" | "error";
 export type ScholarshipStatus = "found" | "applying" | "paused" | "submitted" | "expired";
 export type MonitorStatus = "watching" | "registered" | "failed";
+export type IntramuralSignupStatus = "searching" | "found" | "pending_confirm" | "registered" | "failed";
+export type IntramuralRole = "captain" | "free_agent";
 export type PendingActionType = "essay" | "detail" | "confirmation";
 export type TemplateSource = "dev" | "student";
 export type SubmissionStatus = "draft" | "pending_review" | "approved" | "rejected";
 export type TemplateVisibility = "private" | "public";
 export type AgentOwnerType = "first_party" | "student" | "generated";
-export type AgentType = "scholar" | "reg" | "custom";
+export type AgentType = "scholar" | "reg" | "im" | "custom";
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
 export type AuthMethod = "email" | "ut_sso" | "demo";
 export type LogLevel = "info" | "warning" | "error";
@@ -34,7 +36,8 @@ export type ScenarioId =
   | "marketplace_install_student_template"
   | "submission_pending_to_approved"
   | "my_agents_run_now"
-  | "my_agents_schedule_update";
+  | "my_agents_schedule_update"
+  | "imbot_happy_path";
 
 // Dev3 legacy run types (kept for backward compatibility with runtime store)
 export type RunType = "install" | "manual" | "schedule" | "resume" | "webhook";
@@ -330,6 +333,22 @@ export interface RegistrationMonitorRecord {
   semester: string;
   status: MonitorStatus;
   pollInterval: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface IntramuralSignupRecord {
+  id: string;
+  userId: string;
+  agentId: string;
+  sport: string;
+  division: string;
+  role: IntramuralRole;
+  teamName?: string;
+  preferredDay?: string;
+  preferredTime?: string;
+  registrationFee?: number;
+  status: IntramuralSignupStatus;
   createdAt: number;
   updatedAt: number;
 }
