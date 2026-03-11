@@ -47,7 +47,7 @@ import type {
 export const create = mutation({
   args: agentCreateArgs,
   handler: async (ctx, args): Promise<AgentRecord> => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const timestamp = Date.now();
@@ -124,7 +124,7 @@ export const updateStatus = mutation({
   args: agentUpdateStatusArgs,
   handler: async (ctx, args): Promise<AgentRecord> => {
     const agent = await getAgentOrThrow(ctx, args.agentId);
-    const actingUserId = await resolveActingUserId(ctx, agent.userId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId, args.sessionToken);
     await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
 
     const timestamp = Date.now();
@@ -152,7 +152,7 @@ export const updateStatus = mutation({
 export const listByUser = query({
   args: agentListFilterArgs,
   handler: async (ctx, args) => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     // Use the most selective index based on provided filters
@@ -198,7 +198,7 @@ export const runNow = mutation({
   args: agentRunNowArgs,
   handler: async (ctx, args): Promise<AgentRunNowResult> => {
     const agent = await getAgentOrThrow(ctx, args.agentId);
-    const actingUserId = await resolveActingUserId(ctx, agent.userId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId, args.sessionToken);
     await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
 
     const RUN_NOW_COOLDOWN_MS = 30_000;
@@ -272,7 +272,7 @@ export const updateSchedule = mutation({
   args: agentUpdateScheduleArgs,
   handler: async (ctx, args): Promise<AgentScheduleUpdateResult> => {
     const agent = await getAgentOrThrow(ctx, args.agentId);
-    const actingUserId = await resolveActingUserId(ctx, agent.userId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId, args.sessionToken);
     await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
 
     const timestamp = Date.now();
@@ -319,7 +319,7 @@ export const deleteAgent = mutation({
   args: agentDeleteArgs,
   handler: async (ctx, args): Promise<AgentDeleteResult> => {
     const agent = await getAgentOrThrow(ctx, args.agentId);
-    const actingUserId = await resolveActingUserId(ctx, agent.userId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId, args.sessionToken);
     await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
 
     const deleteMode = assertDeleteAllowed(agent);

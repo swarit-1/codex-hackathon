@@ -21,7 +21,7 @@ function createMockTemplateConfig(
         label: field,
         type: "text",
       })),
-    },
+    } as ConfigEnvelope["inputSchema"],
     defaultConfig: {
       cadenceLabel,
       outcomes,
@@ -29,6 +29,79 @@ function createMockTemplateConfig(
     currentConfig: {
       cadenceLabel,
       outcomes,
+    },
+    defaultSchedule: {
+      enabled: true,
+      cron: "0 9 * * *",
+      timezone: "America/Chicago",
+    },
+  };
+}
+
+const semesterOptions = [
+  "Fall 2025",
+  "Spring 2026",
+  "Summer 2026",
+  "Fall 2026",
+  "Spring 2027",
+  "Summer 2027",
+  "Fall 2027",
+];
+
+function createRegBotTemplateConfig(
+  cadenceLabel: string,
+  outcomes: string[]
+): ConfigEnvelope {
+  return {
+    schemaVersion: "1.0.0",
+    inputSchema: {
+      fields: [
+        {
+          key: "eidLogin",
+          label: "EID login",
+          type: "text",
+          required: true,
+        },
+        {
+          key: "uniqueId",
+          label: "Course Unique Id",
+          type: "text",
+          required: true,
+          uiWidth: "compact",
+        },
+        {
+          key: "semester",
+          label: "Preferred semester",
+          type: "select",
+          required: true,
+          options: semesterOptions.map((option) => ({
+            label: option,
+            value: option,
+          })),
+        },
+        {
+          key: "conflictPolicy",
+          label: "Conflict policy",
+          type: "textarea",
+          required: true,
+        },
+      ],
+    } as ConfigEnvelope["inputSchema"],
+    defaultConfig: {
+      cadenceLabel,
+      outcomes,
+      eidLogin: "",
+      uniqueId: "",
+      semester: "Fall 2026",
+      conflictPolicy: "",
+    },
+    currentConfig: {
+      cadenceLabel,
+      outcomes,
+      eidLogin: "",
+      uniqueId: "",
+      semester: "Fall 2026",
+      conflictPolicy: "",
     },
     defaultSchedule: {
       enabled: true,
@@ -59,12 +132,11 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
     visibility: "public",
     status: "ready",
     scheduleDefault: "Every 10 minutes with retry jitter",
-    setupFields: ["EID login", "Course unique numbers", "Preferred semester", "Conflict policy"],
+    setupFields: ["EID login", "Course Unique Id", "Preferred semester", "Conflict policy"],
     outcomes: ["Seat monitoring", "Conflict confirmation", "Duo retry handling"],
-    templateConfig: createMockTemplateConfig(
+    templateConfig: createRegBotTemplateConfig(
       "Every 10 minutes with retry jitter",
-      ["Seat monitoring", "Conflict confirmation", "Duo retry handling"],
-      ["EID login", "Course unique numbers", "Preferred semester", "Conflict policy"]
+      ["Seat monitoring", "Conflict confirmation", "Duo retry handling"]
     ),
   },
   {

@@ -18,7 +18,7 @@ import type { AgentRecord, CustomWorkflowRecord } from "./types/contracts";
 export const create = mutation({
   args: customWorkflowCreateArgs,
   handler: async (ctx, args): Promise<CustomWorkflowRecord> => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     if (args.agentId) {
@@ -65,7 +65,7 @@ export const create = mutation({
 export const listByUser = query({
   args: customWorkflowListArgs,
   handler: async (ctx, args) => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const workflowDocs = await queryByIndex<Omit<CustomWorkflowRecord, "id">>(
@@ -95,7 +95,7 @@ export const update = mutation({
     }
 
     const workflow = toCustomWorkflowRecord(workflowDoc as any);
-    const actingUserId = await resolveActingUserId(ctx, workflow.userId);
+    const actingUserId = await resolveActingUserId(ctx, workflow.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, workflow.userId);
 
     const patchSource =

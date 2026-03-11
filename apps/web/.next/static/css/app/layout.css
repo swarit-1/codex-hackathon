@@ -773,6 +773,11 @@ textarea,
   gap: 10px;
 }
 
+.form-field.compact input,
+.form-field.compact select {
+  max-width: 10rem;
+}
+
 .checkbox-field {
   display: flex;
   align-items: center;

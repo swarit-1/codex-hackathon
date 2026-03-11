@@ -93,18 +93,19 @@ export function useMarketplaceCategories(): FilterOption[] {
 
 export function useMarketplaceInstall() {
   const convexEnabled = useConvexEnabled();
-  const { userId } = useCurrentUser();
+  const { sessionToken, userId } = useCurrentUser();
   const installTemplateMutation = useMutation(api.marketplace.installTemplate);
 
   return async (
     template: MarketplaceTemplate,
     currentValues: Record<string, EditableConfigValue>
   ) => {
-    if (!convexEnabled || !userId) {
+    if (!convexEnabled || !sessionToken || !userId) {
       return null;
     }
 
     return installTemplateMutation({
+      sessionToken,
       templateId: template.id as Id<"marketplaceTemplates">,
       userId: userId as Id<"users">,
       config: buildConfigEnvelope(template.templateConfig, currentValues),
