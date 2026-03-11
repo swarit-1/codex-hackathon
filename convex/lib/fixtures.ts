@@ -230,5 +230,10 @@ export function buildBackendScenarioFixtures(): Record<ScenarioId, BackendScenar
       "My Agents schedule update",
       "scheduled"
     ),
+    imbot_happy_path: buildRunFixture(
+      "imbot_happy_path",
+      "IMBot happy path",
+      "manual"
+    ),
   };
 }

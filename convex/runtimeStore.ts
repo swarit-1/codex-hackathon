@@ -1,57 +1,22 @@
 import type {
   AgentLogRecord,
   AgentRecord,
-<<<<<<< HEAD
-=======
+  IntramuralSignupRecord,
   MarketplaceTemplateRecord,
->>>>>>> origin/main
   PendingActionRecord,
   RegistrationMonitorRecord,
   ScholarshipRecord,
   ScheduledTaskRecord,
-<<<<<<< HEAD
-=======
   TemplateSubmissionRecord,
->>>>>>> origin/main
 } from "./types/contracts.ts";
-
-interface RuntimeMarketplaceTemplate {
-  id: string;
-  title: string;
-  description: string;
-  source: "dev" | "student";
-  visibility: "public" | "private";
-  category: string;
-  installCount: number;
-  templateConfig: Record<string, unknown>;
-  agentType: "scholar" | "reg" | "custom";
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface RuntimeTemplateSubmission {
-  id: string;
-  userId: string;
-  templateId?: string;
-  status: string;
-  draftPayload?: Record<string, unknown>;
-  reviewerId?: string;
-  reviewNotes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface RuntimeStore {
   agents: Map<string, AgentRecord>;
-<<<<<<< HEAD
-  marketplaceTemplates: Map<string, RuntimeMarketplaceTemplate>;
-  templateSubmissions: Map<string, RuntimeTemplateSubmission>;
-=======
   marketplaceTemplates: Map<string, MarketplaceTemplateRecord>;
   templateSubmissions: Map<string, TemplateSubmissionRecord>;
->>>>>>> origin/main
   scholarships: Map<string, ScholarshipRecord>;
   registrationMonitors: Map<string, RegistrationMonitorRecord>;
+  intramuralSignups: Map<string, IntramuralSignupRecord>;
   pendingActions: Map<string, PendingActionRecord>;
   agentLogs: Map<string, AgentLogRecord>;
   scheduledTasks: Map<string, ScheduledTaskRecord>;
@@ -61,6 +26,7 @@ interface RuntimeStore {
 export const DEFAULT_USER_ID = "user_demo";
 export const SCHOLARBOT_TEMPLATE_ID = "tpl_dev_scholarbot";
 export const REGBOT_TEMPLATE_ID = "tpl_dev_regbot";
+export const IMBOT_TEMPLATE_ID = "tpl_dev_imbot";
 export const STUDENT_TEMPLATE_ID = "tpl_student_custom";
 
 const store: RuntimeStore = {
@@ -69,6 +35,7 @@ const store: RuntimeStore = {
   templateSubmissions: new Map(),
   scholarships: new Map(),
   registrationMonitors: new Map(),
+  intramuralSignups: new Map(),
   pendingActions: new Map(),
   agentLogs: new Map(),
   scheduledTasks: new Map(),
@@ -81,11 +48,7 @@ function nowIso(): string {
 
 function seedTemplates(): void {
   const ts = nowIso();
-<<<<<<< HEAD
-  const baseTemplates: RuntimeMarketplaceTemplate[] = [
-=======
   const baseTemplates: Record<string, unknown>[] = [
->>>>>>> origin/main
     {
       id: SCHOLARBOT_TEMPLATE_ID,
       title: "ScholarBot",
@@ -127,6 +90,25 @@ function seedTemplates(): void {
       updatedAt: ts,
     },
     {
+      id: IMBOT_TEMPLATE_ID,
+      title: "IMBot",
+      description: "First-party intramural sports tracker and registration automation via IMLeagues.",
+      source: "dev",
+      visibility: "public",
+      category: "intramurals",
+      installCount: 0,
+      templateConfig: {
+        sports: ["Basketball", "Flag Football", "Soccer"],
+        division: "C",
+        role: "free_agent",
+        preferredDays: ["Sunday", "Tuesday", "Thursday"],
+        preferredTime: "evening",
+      },
+      agentType: "im",
+      createdAt: ts,
+      updatedAt: ts,
+    },
+    {
       id: STUDENT_TEMPLATE_ID,
       title: "Student Workflow Example",
       description: "Student submitted template used to validate source restrictions.",
@@ -154,6 +136,7 @@ export function resetRuntimeStore(): void {
   store.templateSubmissions.clear();
   store.scholarships.clear();
   store.registrationMonitors.clear();
+  store.intramuralSignups.clear();
   store.pendingActions.clear();
   store.agentLogs.clear();
   store.scheduledTasks.clear();

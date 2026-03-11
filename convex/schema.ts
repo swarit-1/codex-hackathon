@@ -7,6 +7,8 @@ import {
   agentTypeValidator,
   authMethodValidator,
   configEnvelopeValidator,
+  intramuralRoleValidator,
+  intramuralSignupStatusValidator,
   logLevelValidator,
   monitorStatusValidator,
   pendingActionTypeValidator,
@@ -137,6 +139,24 @@ export default defineSchema({
     semester: v.string(),
     status: monitorStatusValidator,
     pollInterval: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_agentId", ["agentId"])
+    .index("by_userId_status", ["userId", "status"]),
+
+  intramuralSignups: defineTable({
+    userId: v.id("users"),
+    agentId: v.id("agents"),
+    sport: v.string(),
+    division: v.string(),
+    role: intramuralRoleValidator,
+    teamName: v.optional(v.string()),
+    preferredDay: v.optional(v.string()),
+    preferredTime: v.optional(v.string()),
+    registrationFee: v.optional(v.number()),
+    status: intramuralSignupStatusValidator,
     createdAt: v.number(),
     updatedAt: v.number(),
   })
