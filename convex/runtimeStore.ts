@@ -2,6 +2,7 @@ import type {
   AgentLogRecord,
   AgentRecord,
   IntramuralSignupRecord,
+  JsonObject,
   MarketplaceTemplateRecord,
   PendingActionRecord,
   RegistrationMonitorRecord,
@@ -42,13 +43,22 @@ const store: RuntimeStore = {
   idCounters: new Map(),
 };
 
-function nowIso(): string {
-  return new Date().toISOString();
+function nowTimestamp(): number {
+  return Date.now();
+}
+
+function createTemplateConfig(defaultConfig: JsonObject): MarketplaceTemplateRecord["templateConfig"] {
+  return {
+    schemaVersion: "1.0.0",
+    inputSchema: {},
+    defaultConfig,
+    currentConfig: defaultConfig,
+  };
 }
 
 function seedTemplates(): void {
-  const ts = nowIso();
-  const baseTemplates: RuntimeMarketplaceTemplate[] = [
+  const ts = nowTimestamp();
+  const baseTemplates: MarketplaceTemplateRecord[] = [
     {
       id: SCHOLARBOT_TEMPLATE_ID,
       title: "ScholarBot",
@@ -57,15 +67,15 @@ function seedTemplates(): void {
       visibility: "public",
       category: "scholarships",
       installCount: 0,
-      templateConfig: {
+      templateConfig: createTemplateConfig({
         sources: ["UT Scholarships", "FastWeb"],
         requireEssay: true,
         profile: {
           major: "CS",
           classification: "Undergraduate",
         },
-      },
-      agentType: "scholar",
+      }),
+      templateType: "scholar",
       createdAt: ts,
       updatedAt: ts,
     },
@@ -77,15 +87,15 @@ function seedTemplates(): void {
       visibility: "public",
       category: "registration",
       installCount: 0,
-      templateConfig: {
+      templateConfig: createTemplateConfig({
         semester: "Fall 2026",
         courseNumber: "CS 378",
         uniqueId: "12345",
         pollIntervalMinutes: 10,
         seatAvailableOnAttempt: 1,
         duoTimeoutAttempts: 0,
-      },
-      agentType: "reg",
+      }),
+      templateType: "reg",
       createdAt: ts,
       updatedAt: ts,
     },
@@ -97,14 +107,14 @@ function seedTemplates(): void {
       visibility: "public",
       category: "intramurals",
       installCount: 0,
-      templateConfig: {
+      templateConfig: createTemplateConfig({
         sports: ["Basketball", "Flag Football", "Soccer"],
         division: "C",
         role: "free_agent",
         preferredDays: ["Sunday", "Tuesday", "Thursday"],
         preferredTime: "evening",
-      },
-      agentType: "im",
+      }),
+      templateType: "im",
       createdAt: ts,
       updatedAt: ts,
     },
@@ -116,10 +126,10 @@ function seedTemplates(): void {
       visibility: "public",
       category: "custom",
       installCount: 0,
-      templateConfig: {
+      templateConfig: createTemplateConfig({
         dryRunOnly: true,
-      },
-      agentType: "custom",
+      }),
+      templateType: "custom",
       createdAt: ts,
       updatedAt: ts,
     },
