@@ -355,6 +355,7 @@ export function MarketplaceTile({
     }
   };
 
+
   return (
     <article className="store-tile" id={template.id}>
       <div className="tile-preview">
@@ -397,6 +398,7 @@ export function MarketplaceTile({
             Install
           </Link>
         )}
+
         <Link className="catalog-link" href={`/marketplace#${template.id}`}>
           Details
         </Link>

@@ -13,6 +13,7 @@ export type SubmissionStatus = "draft" | "pending_review" | "approved" | "reject
 export type TemplateVisibility = "private" | "public";
 export type AgentOwnerType = "first_party" | "student" | "generated";
 export type AgentType = "scholar" | "reg" | "eureka" | "custom" | "im";
+
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
 export type AuthMethod = "email" | "ut_sso" | "demo";
 export type LogLevel = "info" | "warning" | "error";
