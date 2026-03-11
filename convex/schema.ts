@@ -9,6 +9,7 @@ import {
   configEnvelopeValidator,
   intramuralRoleValidator,
   intramuralSignupStatusValidator,
+  labOpeningStatusValidator,
   logLevelValidator,
   monitorStatusValidator,
   pendingActionTypeValidator,
@@ -124,6 +125,29 @@ export default defineSchema({
     matchScore: v.optional(v.number()),
     status: scholarshipStatusValidator,
     missingFields: v.optional(v.array(v.string())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_agentId", ["agentId"])
+    .index("by_userId_status", ["userId", "status"]),
+
+  labOpenings: defineTable({
+    userId: v.id("users"),
+    agentId: v.id("agents"),
+    labName: v.string(),
+    professorName: v.string(),
+    professorEmail: v.string(),
+    department: v.string(),
+    researchArea: v.string(),
+    source: v.string(),
+    postedDate: v.optional(v.number()),
+    deadline: v.optional(v.number()),
+    requirements: v.optional(v.string()),
+    matchScore: v.optional(v.number()),
+    status: labOpeningStatusValidator,
+    emailDraft: v.optional(v.string()),
+    emailSentAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

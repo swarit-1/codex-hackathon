@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  getAgentById,
-  listLogsByScenario,
-  listPendingActionsByAgent,
-  listScholarshipsByAgent,
-  listMonitorsByUser,
-} from "../shared/runtimeAdapters.ts";
-import { installTemplate, resumeFromPendingAction } from "../orchestrator.ts";
+import { listByScenario } from "../../../convex/agentLogs.ts";
+import { getById as getAgentById } from "../../../convex/agents.ts";
+import { installTemplate } from "../../../convex/marketplace.ts";
+import { listByAgent as listPendingByAgent } from "../../../convex/pendingActions.ts";
+import { listByUser as listRegistrationMonitors } from "../../../convex/registrationMonitors.ts";
 import { DEFAULT_USER_ID, REGBOT_TEMPLATE_ID, SCHOLARBOT_TEMPLATE_ID, STUDENT_TEMPLATE_ID, resetRuntimeStore } from "../../../convex/runtimeStore.ts";
+import { listByAgent as listScholarshipsByAgent } from "../../../convex/scholarships.ts";
+import { resumeFromPendingAction } from "../../../convex/orchestrator.ts";
 import {
   MARKETPLACE_INSTALL_DEV_TEMPLATE_SCENARIO,
   REGBOT_HAPPY_PATH_SCENARIO,
@@ -52,9 +51,9 @@ test("marketplace_install_dev_template creates linked runnable scholar agent", a
     "scholar browser prompt should target the UT scholarships search page",
   );
 
-  const installLogs = listLogsByScenario(MARKETPLACE_INSTALL_DEV_TEMPLATE_SCENARIO);
+  const installLogs = listByScenario(MARKETPLACE_INSTALL_DEV_TEMPLATE_SCENARIO);
   assert.ok(installLogs.length >= 1, "install scenario logs should exist");
-  assert.ok(installLogs.every((log: { scenarioId?: string }) => Boolean(log.scenarioId)), "all install logs should include scenarioId");
+  assert.ok(installLogs.every((log) => Boolean(log.scenarioId)), "all install logs should include scenarioId");
 });
 
 test("scholarbot_happy_path pauses then resumes to completion", async () => {
@@ -64,7 +63,7 @@ test("scholarbot_happy_path pauses then resumes to completion", async () => {
     profile: { major: "EE", classification: "Graduate" },
   });
 
-  const pending = listPendingActionsByAgent(install.agentId).at(0);
+  const pending = listPendingByAgent(install.agentId).at(0);
   assert.ok(pending, "scholarbot install run should create pending action");
 
   await resumeFromPendingAction(pending!.id);
@@ -72,45 +71,98 @@ test("scholarbot_happy_path pauses then resumes to completion", async () => {
   const scholarships = listScholarshipsByAgent(install.agentId);
   assert.ok(scholarships.length >= 1, "scholarship upserts should exist");
   assert.ok(
-    scholarships.some((record: { status: string }) => record.status === "submitted"),
+    scholarships.some((record) => record.status === "submitted"),
     "at least one scholarship should be submitted after resume",
   );
 
   const agent = getAgentById(install.agentId);
   assert.equal(agent?.status, "completed");
 
-  const logs = listLogsByScenario(SCHOLARBOT_HAPPY_PATH_SCENARIO);
-  const events = logs.map((log: { event: string }) => log.event);
+  const logs = listByScenario(SCHOLARBOT_HAPPY_PATH_SCENARIO);
+  const events = logs.map((log) => log.event);
   assert.ok(events.includes("pause"), "scholar logs must include pause");
   assert.ok(events.includes("resume"), "scholar logs must include resume");
   assert.ok(events.includes("success"), "scholar logs must include success");
-  assert.ok(logs.every((log: { details: unknown; event: string }) => Boolean((log.details as Record<string, unknown>)?.runId) || log.event === "start"), "logs should retain run metadata");
+  assert.ok(logs.every((log) => Boolean(log.details.runId) || log.event === "start"), "logs should retain run metadata");
 });
 
 test("regbot_happy_path captures Duo retry and successful registration", async () => {
   resetAll();
 
   const install = await installTemplate(REGBOT_TEMPLATE_ID, {
-    courseNumber: "CS 331",
-    uniqueId: "77880",
     semester: "Fall 2026",
-    seatAvailableOnAttempt: 1,
     duoTimeoutAttempts: 1,
     maxPollAttempts: 2,
+    watchList: [
+      {
+        courseNumber: "CS 331",
+        uniqueId: "77880",
+        semester: "Fall 2026",
+        autoRegister: true,
+        seatAvailableOnAttempt: 1,
+      },
+    ],
   });
 
   const agent = getAgentById(install.agentId);
   assert.equal(agent?.status, "completed");
 
-  const monitors = listMonitorsByUser(DEFAULT_USER_ID).filter((monitor: { agentId: string }) => monitor.agentId === install.agentId);
+  const monitors = listRegistrationMonitors(DEFAULT_USER_ID).filter((monitor) => monitor.agentId === install.agentId);
   assert.ok(monitors.length >= 1, "registration monitor should be created");
   assert.equal(monitors[0]?.status, "registered");
 
-  const logs = listLogsByScenario(REGBOT_HAPPY_PATH_SCENARIO);
-  const events = logs.map((log: { event: string }) => log.event);
+  const logs = listByScenario(REGBOT_HAPPY_PATH_SCENARIO);
+  const events = logs.map((log) => log.event);
   assert.ok(events.includes("retry"), "regbot logs should include retry for Duo timeout");
   assert.ok(events.includes("success"), "regbot logs should include success terminal event");
-  assert.ok(logs.every((log: { scenarioId?: string }) => Boolean(log.scenarioId)), "all regbot logs should include scenarioId");
+  assert.ok(logs.every((log) => Boolean(log.scenarioId)), "all regbot logs should include scenarioId");
+});
+
+test("regbot watches multiple registration numbers and auto-registers the first section that opens", async () => {
+  resetAll();
+
+  const install = await installTemplate(REGBOT_TEMPLATE_ID, {
+    semester: "Fall 2026",
+    maxPollAttempts: 3,
+    watchList: [
+      {
+        courseNumber: "CS 429",
+        uniqueId: "51230",
+        semester: "Fall 2026",
+        autoRegister: true,
+        seatAvailableOnAttempt: 3,
+      },
+      {
+        courseNumber: "CS 331",
+        uniqueId: "77880",
+        semester: "Fall 2026",
+        autoRegister: true,
+        seatAvailableOnAttempt: 2,
+      },
+    ],
+  });
+
+  const agent = getAgentById(install.agentId);
+  assert.equal(agent?.status, "completed");
+
+  const monitors = listRegistrationMonitors(DEFAULT_USER_ID).filter((monitor) => monitor.agentId === install.agentId);
+  assert.equal(monitors.length, 2, "one monitor should be created per watched registration number");
+  assert.equal(
+    monitors.find((monitor) => monitor.uniqueId === "77880")?.status,
+    "registered",
+    "first available watched section should be auto-registered",
+  );
+  assert.equal(
+    monitors.find((monitor) => monitor.uniqueId === "51230")?.status,
+    "watching",
+    "later-opening sections should remain under watch once registration succeeds",
+  );
+
+  const logs = listByScenario(REGBOT_HAPPY_PATH_SCENARIO);
+  assert.ok(
+    logs.some((log) => log.details.uniqueId === "77880" && log.event === "success"),
+    "success log should include the registration number that was claimed",
+  );
 });
 
 test("install rejects unsupported student template source in phase 1", async () => {

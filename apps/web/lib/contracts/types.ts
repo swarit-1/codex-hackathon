@@ -6,12 +6,13 @@ import type {
 export type AgentStatus = "active" | "paused" | "completed" | "error";
 export type ScholarshipStatus = "found" | "applying" | "paused" | "submitted" | "expired";
 export type MonitorStatus = "watching" | "registered" | "failed";
-export type PendingActionType = "essay" | "detail" | "confirmation";
+export type LabOpeningStatus = "discovered" | "reviewing" | "drafting_email" | "email_ready" | "contacted" | "expired";
+export type PendingActionType = "essay" | "detail" | "confirmation" | "email_draft";
 export type TemplateSource = "dev" | "student";
 export type SubmissionStatus = "draft" | "pending_review" | "approved" | "rejected";
 export type TemplateVisibility = "private" | "public";
 export type AgentOwnerType = "first_party" | "student" | "generated";
-export type AgentType = "scholar" | "reg" | "im" | "custom";
+export type AgentType = "scholar" | "reg" | "eureka" | "custom" | "im";
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
 export type AuthMethod = "email" | "ut_sso" | "demo";
 export type LogLevel = "info" | "warning" | "error";
@@ -20,6 +21,7 @@ export type RunTriggerSource = "my_agents" | "scheduler" | "pending_action" | "w
 export type ScenarioId =
   | "scholarbot_happy_path"
   | "regbot_happy_path"
+  | "eurekabot_happy_path"
   | "flowforge_happy_path"
   | "regbot_duo_timeout"
   | "webhook_retry_path"
@@ -217,7 +219,7 @@ export type Agent = {
   name: string;
   templateId: string;
   source: TemplateSource;
-  type: "scholar" | "reg" | "custom";
+  type: "scholar" | "reg" | "eureka" | "custom";
   status: AgentStatus;
   lastRunLabel: string;
   nextRunLabel: string;
@@ -233,6 +235,23 @@ export type AgentEvent = {
   title: string;
   detail: string;
   kind: "success" | "warning" | "error";
+};
+
+export type LabOpening = {
+  id: string;
+  labName: string;
+  professorName: string;
+  professorEmail: string;
+  department: string;
+  researchArea: string;
+  source: string;
+  postedDate?: string;
+  deadline?: string;
+  requirements?: string;
+  matchScore: number;
+  status: LabOpeningStatus;
+  emailDraft?: string;
+  emailSentAt?: number;
 };
 
 export type StudioDraft = {

@@ -1,7 +1,6 @@
 declare const process: { env: Record<string, string | undefined> };
 
 import { appendLog, getAgentById, updateAgentById, getPendingActionById } from "./shared/runtimeAdapters.ts";
-import { getRuntimeStore, nextId, DEFAULT_USER_ID } from "../../convex/runtimeStore.ts";
 import type { AgentRecord, AgentRunState, AgentStatus, RunType } from "../../convex/types/contracts.ts";
 import { getBrowserUseClient } from "./browserUseClient.ts";
 import {
@@ -14,10 +13,11 @@ import {
 import { normalizeRuntimeEvent, runtimeEventFromContext, type RawWebhookPayload } from "./shared/eventTypes.ts";
 import { runScholarBot, resumeScholarBot } from "./scholarbot/runner.ts";
 import { runRegBot } from "./regbot/runner.ts";
-import { runCustomAgent } from "./custom/runner.ts";
+import { runEurekaBot, resumeEurekaBot } from "./eurekabot/runner.ts";
 import { runIMBot, resumeIMBot } from "./imbot/runner.ts";
 
 const DEFAULT_SCHOLAR_SEARCH_URL = "https://utexas.scholarships.ngwebsolutions.com/ScholarX_StudentLanding.aspx";
+const DEFAULT_EUREKA_URL = "https://eureka-prod.herokuapp.com/opportunities";
 
 export async function triggerAgentRun(agentId: string, runType: RunType): Promise<Record<string, unknown>> {
   const agent = getAgentById(agentId);
@@ -78,8 +78,8 @@ export async function triggerAgentRun(agentId: string, runType: RunType): Promis
     outcome = runScholarBot(agent, context);
   } else if (agent.type === "reg") {
     outcome = runRegBot(agent, context);
-  } else if (agent.type === "custom") {
-    outcome = runCustomAgent(agent, context);
+  } else if (agent.type === "eureka") {
+    outcome = runEurekaBot(agent, context);
   } else if (agent.type === "im") {
     outcome = runIMBot(agent, context);
   } else {
@@ -200,7 +200,7 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
 
   const context = buildRunContext(agent, "resume");
 
-  if (agent.type !== "scholar" && agent.type !== "im") {
+  if (agent.type !== "scholar" && agent.type !== "eureka" && agent.type !== "im") {
     appendLog({
       agentId: agent.id,
       event: "failure",
@@ -208,11 +208,11 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
       details: {
         runId: context.runId,
         actionId,
-        message: "Pending action resume currently supported only for ScholarBot and IMBot",
+        message: "Pending action resume currently supported only for ScholarBot, EurekaBot, and IMBot",
       },
     });
 
-    throw new Error("Pending action resume currently supported only for ScholarBot and IMBot");
+    throw new Error("Pending action resume currently supported only for ScholarBot, EurekaBot, and IMBot");
   }
 
   const resumeEvent = runtimeEventFromContext(context, "resume", {
@@ -227,7 +227,9 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
     timestamp: resumeEvent.timestamp,
   });
 
-  const outcome = agent.type === "im"
+  const outcome = agent.type === "eureka"
+    ? resumeEurekaBot(agent, context, actionId)
+    : agent.type === "im"
     ? resumeIMBot(agent, context, actionId)
     : resumeScholarBot(agent, context, actionId);
 
@@ -405,39 +407,88 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
   }
 
   if (agent.type === "reg") {
+    const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+    const semester = typeof configObj.semester === "string" ? configObj.semester : "Fall 2026";
+    const watchList = Array.isArray(configObj.watchList) ? configObj.watchList : [];
+    const watchedSections = watchList
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return undefined;
+        const record = entry as Record<string, unknown>;
+        const courseNumber = typeof record.courseNumber === "string" ? record.courseNumber : "Unknown Course";
+        const uniqueId = typeof record.uniqueId === "string" ? record.uniqueId : undefined;
+        if (!uniqueId) return undefined;
+        return `${courseNumber} (${uniqueId})`;
+      })
+      .filter((value): value is string => Boolean(value));
+    const singleTarget =
+      watchedSections.length === 0
+        ? `${typeof configObj.courseNumber === "string" ? configObj.courseNumber : "CS 378"} (${typeof configObj.uniqueId === "string" ? configObj.uniqueId : "12345"})`
+        : undefined;
+    const targetSummary = watchedSections.length > 0 ? watchedSections.join(", ") : singleTarget;
     return [
       "Open the UT registration portal in the local browser context.",
-      "Check the configured course section seat availability and keep the session ready for registration.",
+      `Watch the configured registration numbers for ${semester}: ${targetSummary}.`,
+      "When one of the watched sections opens, immediately continue through the registration flow for that exact registration number.",
+      "If a conflict, hold, or authentication step blocks the registration, report the blocker with the affected registration number.",
       "If authentication is required, pause and report the required user action.",
-    ].join(" ");
+    ]
+      .filter((line) => Boolean(line))
+      .join(" ");
   }
 
-  if (agent.type === "custom") {
-    const customConfig = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
-    const instructions = typeof customConfig.instructions === "string" ? customConfig.instructions.trim() : "";
-    const targetUrl = typeof customConfig.targetUrl === "string" ? customConfig.targetUrl.trim() : "";
+  if (agent.type === "eureka") {
+    const eurekaUrl = resolveEurekaUrl(agent);
+    const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+    const profile = (configObj.profile as Record<string, unknown> | undefined) ?? {};
+    const major = typeof profile.major === "string" ? profile.major : "Computer Science";
+    const classification = typeof profile.classification === "string" ? profile.classification : "Undergraduate";
+    const researchInterests = Array.isArray(profile.researchInterests)
+      ? (profile.researchInterests as string[]).join(", ")
+      : "machine learning, systems";
 
-    if (!instructions) {
-      return process.env.BROWSER_USE_DEFAULT_TASK_PROMPT ?? "Open the target workflow page and report ready state.";
+    if (runType === "resume") {
+      return [
+        `Navigate to ${eurekaUrl}.`,
+        "Continue reviewing the lab opening listings in the current browser context.",
+        "If a login page blocks progress, stop and report the blocker.",
+        "Do NOT submit any applications or send any emails.",
+      ].join(" ");
     }
 
     return [
-      `You are a browser automation agent executing a user-defined workflow.`,
+      `You are a browser automation agent helping a UT Austin student find research lab openings.`,
       ``,
-      `TASK: ${instructions}`,
+      `GOAL: Navigate to the UT Eureka research opportunities page and scan for open lab positions matching the student's profile.`,
       ``,
-      targetUrl ? `TARGET URL: ${targetUrl}` : "",
+      `Student Profile:`,
+      `  - Major: ${major}`,
+      `  - Classification: ${classification}`,
+      `  - Research Interests: ${researchInterests}`,
       ``,
       `Step-by-step instructions:`,
-      targetUrl ? `1. Navigate to ${targetUrl} and wait for the page to fully load.` : `1. Open the target page as described in the task.`,
-      `2. Follow the task description above carefully, performing each action in sequence.`,
-      `3. If you encounter a login or authentication page, stop and report that authentication is required.`,
-      `4. After completing the task, report what actions you took and what results you observed.`,
+      `1. Navigate to ${eurekaUrl} if not already there. Wait for the page to fully load.`,
+      `2. Look for search/filter options on the page. If available:`,
+      `   - Filter by department or field related to "${major}".`,
+      `   - Filter by keywords related to "${researchInterests}".`,
+      `   - Filter for "${classification}" level positions if the option exists.`,
+      `3. Browse through the listed research opportunities and lab openings.`,
+      `4. For each relevant posting, extract:`,
+      `   - Lab/project name`,
+      `   - Professor/PI name and email`,
+      `   - Department`,
+      `   - Research area/description`,
+      `   - Requirements or qualifications`,
+      `   - Application deadline (if listed)`,
+      `   - Posted date`,
+      `5. Collect information for up to 10 relevant openings.`,
+      `6. Report back all extracted lab openings with their details.`,
       ``,
       `CRITICAL RULES:`,
-      `- Follow the task description faithfully.`,
-      `- If you encounter an error or unexpected state, stop and report the issue.`,
-      `- Do NOT submit any final forms or make irreversible changes without explicit instruction.`,
+      `- DO NOT submit any applications or send any emails.`,
+      `- DO NOT click on any Apply or Contact buttons.`,
+      `- If you encounter a login page, stop and report that authentication is required.`,
+      `- Focus on positions that match the student's major and research interests.`,
+      `- Take your time to thoroughly scan all available listings.`,
     ]
       .filter((line) => line !== "")
       .join("\n");
@@ -509,10 +560,8 @@ function buildBrowserUseStartUrl(agent: AgentRecord): string | undefined {
   if (agent.type === "scholar") {
     return resolveScholarSearchUrl(agent);
   }
-  if (agent.type === "custom") {
-    const customConfig = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
-    const targetUrl = typeof customConfig.targetUrl === "string" ? customConfig.targetUrl.trim() : "";
-    return targetUrl.length > 0 ? targetUrl : undefined;
+  if (agent.type === "eureka") {
+    return resolveEurekaUrl(agent);
   }
   if (agent.type === "im") {
     return "https://www.imleagues.com/UTexas";
@@ -535,47 +584,17 @@ function resolveScholarSearchUrl(agent: AgentRecord): string {
   return DEFAULT_SCHOLAR_SEARCH_URL;
 }
 
-export async function installTemplate(
-  templateId: string,
-  userConfig: Record<string, unknown>,
-): Promise<{ agentId: string; runResult?: Record<string, unknown> }> {
-  const store = getRuntimeStore();
-  const template = store.marketplaceTemplates.get(templateId);
-  if (!template) {
-    throw new Error(`Template not found: ${templateId}`);
+function resolveEurekaUrl(agent: AgentRecord): string {
+  const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+  const fromConfig = configObj.eurekaUrl;
+  if (typeof fromConfig === "string" && fromConfig.trim().length > 0) {
+    return fromConfig.trim();
   }
 
-  const tpl = template as unknown as { source: string; templateType: string; templateConfig: Record<string, unknown>; title: string };
-  if (tpl.source !== "dev") {
-    throw new Error(`Phase 1 supports only dev templates, received source: ${tpl.source}`);
-  }
-  if (tpl.templateType !== "scholar" && tpl.templateType !== "reg") {
-    throw new Error(`Phase 1 supports only first-party scholar/reg templates, received: ${tpl.templateType}`);
+  const fromEnv = process.env.BROWSER_USE_EUREKA_URL;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
   }
 
-  const agentId = nextId("agent");
-  const now = Date.now();
-  const mergedConfig = { ...tpl.templateConfig, ...userConfig };
-
-  const agent: AgentRecord = {
-    id: agentId,
-    userId: DEFAULT_USER_ID,
-    templateId,
-    ownerType: "first_party",
-    type: tpl.templateType as AgentRecord["type"],
-    status: "active",
-    config: {
-      schemaVersion: "1.0",
-      inputSchema: {},
-      defaultConfig: mergedConfig as import("../../convex/types/contracts.ts").JsonObject,
-    },
-    schedule: { enabled: false, cron: "", timezone: "America/Chicago" },
-    lastRunStatus: "idle",
-    createdAt: now,
-    updatedAt: now,
-  };
-  store.agents.set(agentId, agent);
-
-  const runResult = await triggerAgentRun(agentId, "install");
-  return { agentId, runResult };
+  return DEFAULT_EUREKA_URL;
 }
