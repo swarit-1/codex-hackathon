@@ -1,13 +1,15 @@
 import { internalAction, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { getDoc, patchDoc } from "./lib/db";
+import { patchDoc } from "./lib/db";
 import { appendAgentLog } from "./lib/logging";
+import {
+  buildTaskPrompt,
+  resolveBrowserUseRuntimeModeFromEnv,
+} from "./lib/runtimePrompt";
 import type {
-  AgentRecord,
   AgentType,
   ConfigEnvelope,
-  JsonObject,
 } from "./types/contracts";
 
 // ---------------------------------------------------------------------------
@@ -16,104 +18,33 @@ import type {
 
 const BROWSER_USE_API_URL = "https://api.browser-use.com/api/v2";
 
-function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): string {
-  const currentConfig = (config.currentConfig ?? config.defaultConfig) as JsonObject;
-  const targetUrl = (currentConfig.targetUrl as string) ?? "";
-
-  switch (agentType) {
-    case "scholar": {
-      const major = ((currentConfig.profile as JsonObject)?.major as string) ?? "Computer Science";
-      const startUrl = targetUrl || "https://utexas.scholarships.ngwebsolutions.com/Scholarships/Search";
-      return `You are a browser automation agent helping a UT Austin student apply to a scholarship.
-
-GOAL: Navigate to the scholarship search page, find the "CREEES McWilliams Scholarship", \
-click its "Apply Now" button, and then fill out the entire scholarship application \
-form across all pages — but DO NOT submit at the end.
-
-Step-by-step instructions:
-
-1. You should already be on ${startUrl}. Wait for the page to fully load.
-
-2. Look through the list of scholarships on the page for "CREEES McWilliams Scholarship". \
-   You may need to scroll down or paginate through results to find it. \
-   Once you find it, click the "Apply Now" button next to it.
-
-3. If you are redirected to a UT EID login page (login.utexas.edu or similar):
-   - Enter the UT EID and password if credentials are provided.
-   - Click the login/sign-in button.
-   - Handle any Duo or MFA prompts if they appear (e.g. click "Send Me a Push" \
-     or approve via the Duo app — wait for it to complete).
-   - After login, you should be redirected back to the scholarship application.
-
-4. Once on the scholarship application form, fill out ALL available fields on \
-   each page. Use reasonable values for a UT Austin undergraduate ${major} student. \
-   For text fields that ask for essays or explanations, write 2-3 thoughtful sentences.
-
-5. After completing all fields on a page, click "Next", "Continue", or the next \
-   step/page button to proceed.
-
-6. Continue filling out ALL pages of the application.
-
-7. On the FINAL page/step, STOP. Do NOT click "Submit", "Finish", or any button \
-   that would finalize/submit the application.
-
-8. Report back what fields you found on each page and what values you entered.
-
-CRITICAL RULES:
-- DO NOT click any Submit or Finish button that would finalize the application.
-- Fill out EVERY field on EVERY page before moving to the next page.
-- If a dropdown does not have an exact match, pick the closest available option.
-- Take your time and be thorough — fill ALL fields before proceeding.`;
-    }
-
-    case "reg": {
-      const courseNumber = (currentConfig.courseNumber as string) ?? "";
-      const uniqueId = (currentConfig.uniqueId as string) ?? "";
-      const semester = (currentConfig.semester as string) ?? "";
-      return `You are a class registration monitor for a UT Austin student.
-
-GOAL: Check if a seat is available for ${courseNumber} (Unique ID: ${uniqueId}) for ${semester}.
-
-1. Navigate to ${targetUrl || "https://utdirect.utexas.edu/registration/classlist/nologin/"}.
-2. Search for course ${courseNumber} with unique ID ${uniqueId}.
-3. Check if there are any open seats available.
-4. Report the current enrollment status: total seats, seats taken, seats available, and waitlist count if any.`;
-    }
-
-    case "custom":
-    default: {
-      const taskDescription = (currentConfig.taskDescription as string) ?? "";
-      if (taskDescription) {
-        return taskDescription;
-      }
-      if (targetUrl) {
-        return `Navigate to ${targetUrl} and report what you find on the page.`;
-      }
-      return "No task configured for this agent.";
-    }
-  }
-}
-
 // Browser profile with saved cookies/auth for UT Austin sites
 const BROWSER_USE_PROFILE_ID = "bcf273d4-abc4-40c4-b506-8ad330d4c678";
 
 async function callBrowserUseAPI(
   apiKey: string,
-  taskPrompt: string
+  taskPrompt: string,
+  startUrl?: string
 ): Promise<{ taskId: string; liveUrl: string }> {
+  const payload: Record<string, unknown> = {
+    task: taskPrompt,
+    sessionSettings: {
+      profileId: BROWSER_USE_PROFILE_ID,
+      proxyCountryCode: "us",
+    },
+  };
+  if (startUrl && startUrl.trim().length > 0) {
+    payload.start_url = startUrl;
+    payload.startUrl = startUrl;
+  }
+
   const response = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Browser-Use-API-Key": apiKey,
     },
-    body: JSON.stringify({
-      task: taskPrompt,
-      sessionSettings: {
-        profileId: BROWSER_USE_PROFILE_ID,
-        proxyCountryCode: "us",
-      },
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -239,13 +170,15 @@ export const launchBrowserTask = internalAction({
       return;
     }
 
-    const taskPrompt = buildTaskPrompt(
+    const runtimeMode = resolveBrowserUseRuntimeModeFromEnv();
+    const { taskPrompt, startUrl } = buildTaskPrompt(
       args.agentType as AgentType,
-      args.config as ConfigEnvelope
+      args.config as ConfigEnvelope,
+      runtimeMode
     );
 
     try {
-      const { taskId, liveUrl } = await callBrowserUseAPI(apiKey, taskPrompt);
+      const { taskId, liveUrl } = await callBrowserUseAPI(apiKey, taskPrompt, startUrl);
 
       await ctx.runMutation(internal.runtime.updateAgentRunStatus, {
         agentId: args.agentId,
