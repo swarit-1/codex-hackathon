@@ -1,67 +1,115 @@
-import { getRuntimeStore, nextId } from "./runtimeStore.ts";
-import type { MonitorStatus, RegistrationMonitorRecord } from "./types/contracts.ts";
+import { mutation, query } from "./_generated/server";
+import { getDoc, insertDoc, patchDoc, queryByIndex } from "./lib/db";
+import { notFoundError } from "./lib/errors";
+import { paginateItems } from "./lib/pagination";
+import { toAgentRecord, toRegistrationMonitorRecord } from "./lib/records";
+import {
+  registrationMonitorCreateArgs,
+  registrationMonitorListArgs,
+} from "./lib/validators";
+import {
+  assertCanManageAgent,
+  assertUserOwnsResource,
+  resolveActingUserId,
+} from "./security/authz";
+import type { AgentRecord, RegistrationMonitorRecord } from "./types/contracts";
 
-export interface CreateMonitorInput {
-  userId: string;
-  agentId: string;
-  courseNumber: string;
-  uniqueId: string;
-  semester: string;
-  pollIntervalMinutes: number;
-}
+export const create = mutation({
+  args: registrationMonitorCreateArgs,
+  handler: async (ctx, args): Promise<RegistrationMonitorRecord> => {
+    const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
 
-export function create(payload: CreateMonitorInput): RegistrationMonitorRecord {
-  const store = getRuntimeStore();
-  const existing = [...store.registrationMonitors.values()].find(
-    (monitor) =>
-      monitor.agentId === payload.agentId &&
-      monitor.courseNumber === payload.courseNumber &&
-      monitor.uniqueId === payload.uniqueId &&
-      monitor.semester === payload.semester,
-  );
+    if (!agentDoc) {
+      throw notFoundError("agent not found", {
+        agentId: args.agentId,
+      });
+    }
 
-  if (existing) {
-    return existing;
-  }
+    const agent = toAgentRecord(agentDoc as any);
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? args.userId);
 
-  const monitor: RegistrationMonitorRecord = {
-    id: nextId("reg_monitor"),
-    userId: payload.userId,
-    agentId: payload.agentId,
-    courseNumber: payload.courseNumber,
-    uniqueId: payload.uniqueId,
-    semester: payload.semester,
-    status: "watching",
-    pollIntervalMinutes: payload.pollIntervalMinutes,
-    updatedAt: new Date().toISOString(),
-  };
+    const existing = (
+      await queryByIndex<Omit<RegistrationMonitorRecord, "id">>(
+        ctx,
+        "registrationMonitors",
+        "by_agentId",
+        [["agentId", args.agentId]]
+      )
+    ).find(
+      (monitor) =>
+        monitor.uniqueId === args.uniqueId && monitor.semester === args.semester
+    );
 
-  store.registrationMonitors.set(monitor.id, monitor);
-  return monitor;
-}
+    const timestamp = Date.now();
+    const status = args.status ?? "watching";
 
-export function listByUser(userId: string): RegistrationMonitorRecord[] {
-  return [...getRuntimeStore().registrationMonitors.values()].filter((monitor) => monitor.userId === userId);
-}
+    if (existing) {
+      await patchDoc(ctx, existing._id, {
+        courseNumber: args.courseNumber,
+        uniqueId: args.uniqueId,
+        semester: args.semester,
+        status,
+        pollInterval: args.pollInterval,
+        updatedAt: timestamp,
+      });
 
-export function updateStatus(monitorId: string, status: MonitorStatus): RegistrationMonitorRecord {
-  const store = getRuntimeStore();
-  const existing = store.registrationMonitors.get(monitorId);
-  if (!existing) {
-    throw new Error(`Registration monitor not found: ${monitorId}`);
-  }
+      return {
+        ...toRegistrationMonitorRecord(existing as any),
+        courseNumber: args.courseNumber,
+        uniqueId: args.uniqueId,
+        semester: args.semester,
+        status,
+        pollInterval: args.pollInterval,
+        updatedAt: timestamp,
+      };
+    }
 
-  const updated: RegistrationMonitorRecord = {
-    ...existing,
-    status,
-    lastCheckedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+    const id = await insertDoc(ctx, "registrationMonitors", {
+      userId: args.userId,
+      agentId: args.agentId,
+      courseNumber: args.courseNumber,
+      uniqueId: args.uniqueId,
+      semester: args.semester,
+      status,
+      pollInterval: args.pollInterval,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
 
-  store.registrationMonitors.set(monitorId, updated);
-  return updated;
-}
+    return {
+      id,
+      userId: args.userId,
+      agentId: args.agentId,
+      courseNumber: args.courseNumber,
+      uniqueId: args.uniqueId,
+      semester: args.semester,
+      status,
+      pollInterval: args.pollInterval,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  },
+});
 
-export function listByAgent(agentId: string): RegistrationMonitorRecord[] {
-  return [...getRuntimeStore().registrationMonitors.values()].filter((monitor) => monitor.agentId === agentId);
-}
+export const listByUser = query({
+  args: registrationMonitorListArgs,
+  handler: async (ctx, args) => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
+
+    const monitors = await queryByIndex<Omit<RegistrationMonitorRecord, "id">>(
+      ctx,
+      "registrationMonitors",
+      "by_userId",
+      [["userId", args.userId]]
+    );
+
+    const filtered = monitors
+      .map((monitor) => toRegistrationMonitorRecord(monitor as any))
+      .filter((monitor) => !args.status || monitor.status === args.status)
+      .sort((left, right) => right.updatedAt - left.updatedAt);
+
+    return paginateItems(filtered, args);
+  },
+});

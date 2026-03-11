@@ -1,330 +1,364 @@
-import { append as appendLog } from "./agentLogs.ts";
-import { DEFAULT_USER_ID, getRuntimeStore, nextId } from "./runtimeStore.ts";
-import type {
-  AgentRecord,
-  AgentStatus,
-  AgentType,
-  AgentOwnerType,
-  RunType,
-  ScheduledTaskRecord,
-} from "./types/contracts.ts";
+import { mutation, query } from "./_generated/server";
 import {
-  MY_AGENTS_DELETE_SCENARIO,
-  MY_AGENTS_RUN_NOW_SCENARIO,
-  MY_AGENTS_SCHEDULE_UPDATE_SCENARIO,
-} from "../services/agents/shared/payloadMappers.ts";
-import { computeNextRunAt, validateCronSchedule } from "../services/agents/shared/schedule.ts";
+  deleteDoc,
+  getDoc,
+  insertDoc,
+  patchDoc,
+  queryByIndex,
+} from "./lib/db";
+import { invalidStateError, notFoundError } from "./lib/errors";
+import { appendAgentLog } from "./lib/logging";
+import {
+  deriveAgentOwnerType,
+  mergeInstalledConfig,
+  resolveInstalledSchedule,
+} from "./lib/marketplace";
+import { paginateItems } from "./lib/pagination";
+import { toAgentRecord, toMarketplaceTemplateRecord } from "./lib/records";
+import {
+  assertDeleteAllowed,
+  assertValidScheduleConfig,
+  buildAgentOperationEvent,
+  buildRuntimeHandoffPayload,
+} from "./lib/runControl";
+import {
+  agentCreateArgs,
+  agentDeleteArgs,
+  agentListFilterArgs,
+  agentRunNowArgs,
+  agentUpdateScheduleArgs,
+  agentUpdateStatusArgs,
+} from "./lib/validators";
+import {
+  assertUserOwnsResource,
+  assertCanManageAgent,
+  assertCanReadTemplate,
+  resolveActingUserId,
+} from "./security/authz";
+import type {
+  AgentDeleteResult,
+  AgentRecord,
+  AgentRunNowResult,
+  AgentScheduleUpdateResult,
+  MarketplaceTemplateRecord,
+} from "./types/contracts";
 
-export interface CreateAgentOptions {
-  userId?: string;
-  templateId?: string;
-  ownerType?: AgentOwnerType;
-  schedule?: string;
-}
+async function getAgentOrThrow(ctx: any, agentId: string): Promise<AgentRecord> {
+  const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, agentId);
 
-export function create(type: AgentType, config: Record<string, unknown>, options: CreateAgentOptions = {}): AgentRecord {
-  const store = getRuntimeStore();
-  const now = new Date().toISOString();
-
-  const agent: AgentRecord = {
-    id: nextId("agent"),
-    userId: options.userId ?? DEFAULT_USER_ID,
-    templateId: options.templateId,
-    ownerType: options.ownerType ?? "generated",
-    type,
-    status: "active",
-    config,
-    schedule: options.schedule,
-    currentRunState: "idle",
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  store.agents.set(agent.id, agent);
-  return agent;
-}
-
-export function getById(agentId: string): AgentRecord | undefined {
-  return getRuntimeStore().agents.get(agentId);
-}
-
-export function listByUser(userId: string = DEFAULT_USER_ID): AgentRecord[] {
-  return [...getRuntimeStore().agents.values()].filter((agent) => agent.userId === userId && !agent.deletedAt);
-}
-
-export function updateStatus(agentId: string, status: AgentStatus): AgentRecord {
-  return updateById(agentId, {
-    status,
-    updatedAt: new Date().toISOString(),
-  });
-}
-
-export function updateById(agentId: string, patch: Partial<AgentRecord>): AgentRecord {
-  const store = getRuntimeStore();
-  const existing = store.agents.get(agentId);
-  if (!existing) {
-    throw new Error(`Agent not found: ${agentId}`);
-  }
-
-  const updated: AgentRecord = {
-    ...existing,
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  store.agents.set(agentId, updated);
-  return updated;
-}
-
-export async function runNow(agentId: string): Promise<{
-  idempotent: boolean;
-  agentId: string;
-  runId?: string;
-  runState: AgentRecord["currentRunState"];
-  browserTaskId?: string;
-  scenarioId: string;
-  reason?: string;
-  result?: Record<string, unknown>;
-}> {
-  const agent = getById(agentId);
-  if (!agent || agent.deletedAt) {
-    throw new Error(`Cannot run missing/deleted agent: ${agentId}`);
-  }
-
-  appendLog({
-    agentId,
-    event: "step",
-    scenarioId: MY_AGENTS_RUN_NOW_SCENARIO,
-    details: {
-      message: "Run-now requested",
-      currentRunState: agent.currentRunState,
-      currentRunId: agent.currentRunId,
-    },
-  });
-
-  if (agent.currentRunState === "running") {
-    appendLog({
+  if (!agentDoc) {
+    throw notFoundError("agent not found", {
       agentId,
-      event: "step",
-      scenarioId: MY_AGENTS_RUN_NOW_SCENARIO,
+    });
+  }
+
+  return toAgentRecord(agentDoc as any);
+}
+
+async function deleteByAgentId(ctx: any, table: string, agentId: string): Promise<void> {
+  const docs = await queryByIndex<Record<string, unknown>>(
+    ctx,
+    table,
+    "by_agentId",
+    [["agentId", agentId]]
+  );
+
+  await Promise.all(docs.map((doc) => deleteDoc(ctx, doc._id)));
+}
+
+export const create = mutation({
+  args: agentCreateArgs,
+  handler: async (ctx, args): Promise<AgentRecord> => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
+
+    const timestamp = Date.now();
+    let ownerType = args.ownerType ?? "generated";
+    let type = args.type;
+    let config = args.config;
+    let schedule = args.schedule ?? resolveInstalledSchedule(args.config);
+
+    if (args.templateId) {
+      const templateDoc = await getDoc<Omit<MarketplaceTemplateRecord, "id">>(ctx, args.templateId);
+
+      if (!templateDoc) {
+        throw notFoundError("template not found", {
+          templateId: args.templateId,
+        });
+      }
+
+      const template = toMarketplaceTemplateRecord(templateDoc as any);
+      await assertCanReadTemplate(ctx, template, actingUserId ?? args.userId);
+
+      ownerType = args.ownerType ?? deriveAgentOwnerType(template.source);
+      type = template.templateType;
+      config = mergeInstalledConfig(template.templateConfig, args.config);
+      schedule = args.schedule ?? resolveInstalledSchedule(config, template.templateConfig.defaultSchedule);
+    }
+
+    const validatedSchedule = assertValidScheduleConfig(schedule);
+    const nextRunAt = validatedSchedule.enabled ? timestamp : undefined;
+
+    const agentId = await insertDoc(ctx, "agents", {
+      userId: args.userId,
+      templateId: args.templateId,
+      ownerType,
+      type,
+      status: "active",
+      config,
+      schedule: validatedSchedule,
+      lastRunStatus: "idle",
+      lastRunAt: undefined,
+      nextRunAt,
+      browserUseTaskId: undefined,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+
+    await appendAgentLog(ctx, {
+      agentId,
+      event: "agent.created",
       details: {
-        message: "Run-now idempotent short-circuit; run already in progress",
-        currentRunState: agent.currentRunState,
-        currentRunId: agent.currentRunId,
-        browserTaskId: agent.browserUseTaskId,
+        ownerType,
+        type,
+        templateId: args.templateId,
       },
     });
 
     return {
-      idempotent: true,
-      reason: "agent already running",
-      agentId: agent.id,
-      runId: agent.currentRunId,
-      runState: agent.currentRunState,
-      browserTaskId: agent.browserUseTaskId,
-      scenarioId: MY_AGENTS_RUN_NOW_SCENARIO,
-    };
-  }
-
-  const orchestrator = await import("./orchestrator.ts");
-  const result = (await orchestrator.triggerAgentRun(agentId, "manual")) as Record<string, unknown>;
-  const latest = getById(agentId);
-
-  return {
-    idempotent: false,
-    agentId,
-    runId: typeof result.runId === "string" ? result.runId : latest?.currentRunId,
-    runState: latest?.currentRunState ?? "idle",
-    browserTaskId:
-      typeof result.browserTaskId === "string" ? result.browserTaskId : latest?.browserUseTaskId,
-    scenarioId: MY_AGENTS_RUN_NOW_SCENARIO,
-    result,
-  };
-}
-
-export function updateSchedule(
-  agentId: string,
-  schedule: string,
-): {
-  agent: AgentRecord;
-  nextRunAt: string;
-  scheduledTaskId: string;
-  validation: { valid: true; normalized: string; errors: [] };
-  scenarioId: string;
-} {
-  const agent = getById(agentId);
-  if (!agent || agent.deletedAt) {
-    throw new Error(`Cannot update schedule for missing/deleted agent: ${agentId}`);
-  }
-
-  const validation = validateCronSchedule(schedule);
-  if (!validation.valid || !validation.normalized) {
-    throw new Error(`Invalid schedule. ${validation.errors.join(" ")}`);
-  }
-
-  const previousSchedule = agent.schedule;
-  const previousTaskId = agent.scheduledTaskId;
-  let cancelledPreviousTask = false;
-
-  if (previousTaskId) {
-    cancelledPreviousTask = cancelScheduledTask(previousTaskId).cancelled;
-  }
-
-  const nextRunAt = computeNextRunAt(validation.normalized);
-  const scheduledTask = createScheduledTask(agentId, validation.normalized, nextRunAt);
-
-  const updated = updateById(agentId, {
-    schedule: validation.normalized,
-    nextRunAt,
-    scheduledTaskId: scheduledTask.id,
-    lastControlAction: "update_schedule",
-    lastControlActionAt: new Date().toISOString(),
-  });
-
-  appendLog({
-    agentId,
-    event: "success",
-    scenarioId: MY_AGENTS_SCHEDULE_UPDATE_SCENARIO,
-    details: {
-      message: "Schedule update applied",
-      previousSchedule,
-      nextSchedule: validation.normalized,
-      previousTaskId,
-      cancelledPreviousTask,
+      id: agentId,
+      userId: args.userId,
+      templateId: args.templateId,
+      ownerType,
+      type,
+      status: "active",
+      config,
+      schedule: validatedSchedule,
+      lastRunStatus: "idle",
       nextRunAt,
-      scheduledTaskId: scheduledTask.id,
-      validation: {
-        valid: true,
-        normalized: validation.normalized,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  },
+});
+
+export const updateStatus = mutation({
+  args: agentUpdateStatusArgs,
+  handler: async (ctx, args): Promise<AgentRecord> => {
+    const agent = await getAgentOrThrow(ctx, args.agentId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
+
+    const timestamp = Date.now();
+    await patchDoc(ctx, args.agentId, {
+      status: args.status,
+      updatedAt: timestamp,
+    });
+
+    await appendAgentLog(ctx, {
+      agentId: args.agentId,
+      event: "agent.status.updated",
+      details: {
+        status: args.status,
       },
-    },
-  });
+    });
 
-  return {
-    agent: updated,
-    nextRunAt,
-    scheduledTaskId: scheduledTask.id,
-    validation: {
-      valid: true,
-      normalized: validation.normalized,
-      errors: [],
-    },
-    scenarioId: MY_AGENTS_SCHEDULE_UPDATE_SCENARIO,
-  };
-}
+    return {
+      ...agent,
+      status: args.status,
+      updatedAt: timestamp,
+    };
+  },
+});
 
-export async function deleteAgent(agentId: string): Promise<{
-  agentId: string;
-  deletedAt: string;
-  cancellation: {
-    attempted: boolean;
-    succeeded: boolean;
-    taskId?: string;
-    scheduleTaskId?: string;
-    scheduleCancelled: boolean;
-  };
-  scenarioId: string;
-}> {
-  const existing = getById(agentId);
-  if (!existing) {
-    throw new Error(`Agent not found: ${agentId}`);
-  }
+export const listByUser = query({
+  args: agentListFilterArgs,
+  handler: async (ctx, args) => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
-  const orchestrator = await import("./orchestrator.ts");
+    const agents = await queryByIndex<Omit<AgentRecord, "id">>(
+      ctx,
+      "agents",
+      "by_userId",
+      [["userId", args.userId]]
+    );
 
-  const runCancellation =
-    existing.currentRunState === "running" || Boolean(existing.browserUseTaskId)
-      ? await orchestrator.cancelAgentRun(agentId, {
-          scenarioId: MY_AGENTS_DELETE_SCENARIO,
-          reason: "delete_request",
-        })
-      : { attempted: false, succeeded: false };
+    const filteredAgents = agents
+      .map((agent) => toAgentRecord(agent as any))
+      .filter((agent) => {
+        if (args.status && agent.status !== args.status) {
+          return false;
+        }
 
-  let scheduleCancelled = false;
-  if (existing.scheduledTaskId) {
-    scheduleCancelled = cancelScheduledTask(existing.scheduledTaskId).cancelled;
-  }
+        if (args.ownerType && agent.ownerType !== args.ownerType) {
+          return false;
+        }
 
-  const deletedAt = new Date().toISOString();
-  updateById(agentId, {
-    status: "completed",
-    deletedAt,
-    currentRunState: runCancellation.succeeded ? "cancelled" : "completed",
-    currentRunId: undefined,
-    browserUseTaskId: undefined,
-    scheduledTaskId: undefined,
-    nextRunAt: undefined,
-    lastControlAction: "delete",
-    lastControlActionAt: deletedAt,
-  });
+        if (args.type && agent.type !== args.type) {
+          return false;
+        }
 
-  appendLog({
-    agentId,
-    event: "success",
-    scenarioId: MY_AGENTS_DELETE_SCENARIO,
-    details: {
-      message: "Delete completed with safe cancellation semantics",
-      deletedAt,
-      runCancellation,
-      scheduleCancelled,
-      scheduleTaskId: existing.scheduledTaskId,
-    },
-  });
+        return true;
+      })
+      .sort((left, right) => right.updatedAt - left.updatedAt);
 
-  return {
-    agentId,
-    deletedAt,
-    cancellation: {
-      attempted: runCancellation.attempted,
-      succeeded: runCancellation.succeeded,
-      taskId: runCancellation.taskId,
-      scheduleTaskId: existing.scheduledTaskId,
-      scheduleCancelled,
-    },
-    scenarioId: MY_AGENTS_DELETE_SCENARIO,
-  };
-}
+    return paginateItems(filteredAgents, args);
+  },
+});
+
+export const runNow = mutation({
+  args: agentRunNowArgs,
+  handler: async (ctx, args): Promise<AgentRunNowResult> => {
+    const agent = await getAgentOrThrow(ctx, args.agentId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
+
+    const timestamp = Date.now();
+    const alreadyRunning = agent.lastRunStatus === "running";
+    const operationEvent = buildAgentOperationEvent({
+      agentId: agent.id,
+      operation: "run_now",
+      status: alreadyRunning ? "deferred" : "accepted",
+      source: "my_agents",
+      emittedAt: timestamp,
+      message: alreadyRunning
+        ? "run request ignored because agent is already running"
+        : "manual run request accepted for downstream runtime processing",
+    });
+    const handoffPayload = buildRuntimeHandoffPayload({
+      agentId: agent.id,
+      runType: "manual",
+      source: "my_agents",
+      requestedAt: timestamp,
+      requestedByUserId: actingUserId ?? agent.userId,
+      schedule: agent.schedule,
+    });
+
+    if (!alreadyRunning) {
+      await patchDoc(ctx, args.agentId, {
+        status: "active",
+        lastRunStatus: "running",
+        lastRunAt: timestamp,
+        updatedAt: timestamp,
+      });
+    }
+
+    await appendAgentLog(ctx, {
+      agentId: args.agentId,
+      event: "agent.run_now.requested",
+      details: operationEvent,
+    });
+
+    await appendAgentLog(ctx, {
+      agentId: args.agentId,
+      event: "agent.runtime.handoff_prepared",
+      details: handoffPayload,
+    });
+
+    return {
+      agent: {
+        ...agent,
+        status: "active",
+        lastRunStatus: alreadyRunning ? agent.lastRunStatus : "running",
+        lastRunAt: alreadyRunning ? agent.lastRunAt : timestamp,
+        updatedAt: alreadyRunning ? agent.updatedAt : timestamp,
+      },
+      operationEvent,
+      handoffPayload,
+      alreadyRunning,
+    };
+  },
+});
+
+export const updateSchedule = mutation({
+  args: agentUpdateScheduleArgs,
+  handler: async (ctx, args): Promise<AgentScheduleUpdateResult> => {
+    const agent = await getAgentOrThrow(ctx, args.agentId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
+
+    const timestamp = Date.now();
+    const schedule = assertValidScheduleConfig(args.schedule);
+    const nextRunAt = schedule.enabled ? timestamp : undefined;
+
+    await patchDoc(ctx, args.agentId, {
+      schedule,
+      nextRunAt,
+      updatedAt: timestamp,
+    });
+
+    const operationEvent = buildAgentOperationEvent({
+      agentId: agent.id,
+      operation: "schedule_update",
+      status: "accepted",
+      source: "my_agents",
+      emittedAt: timestamp,
+      message: "schedule updated successfully",
+      metadata: {
+        schedule: schedule as any,
+      },
+    });
+
+    await appendAgentLog(ctx, {
+      agentId: args.agentId,
+      event: "agent.schedule.updated",
+      details: operationEvent,
+    });
+
+    return {
+      agent: {
+        ...agent,
+        schedule,
+        nextRunAt,
+        updatedAt: timestamp,
+      },
+      operationEvent,
+    };
+  },
+});
+
+export const deleteAgent = mutation({
+  args: agentDeleteArgs,
+  handler: async (ctx, args): Promise<AgentDeleteResult> => {
+    const agent = await getAgentOrThrow(ctx, args.agentId);
+    const actingUserId = await resolveActingUserId(ctx, agent.userId);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
+
+    const deleteMode = assertDeleteAllowed(agent);
+
+    if (deleteMode === "cancel_then_archive") {
+      throw invalidStateError("running agents cannot be deleted until runtime cancellation is wired", {
+        agentId: args.agentId,
+      });
+    }
+
+    const timestamp = Date.now();
+    const operationEvent = buildAgentOperationEvent({
+      agentId: agent.id,
+      operation: "delete",
+      status: "accepted",
+      source: "my_agents",
+      emittedAt: timestamp,
+      message: "agent deleted successfully",
+    });
+
+    await Promise.all([
+      deleteByAgentId(ctx, "agentLogs", args.agentId),
+      deleteByAgentId(ctx, "scholarships", args.agentId),
+      deleteByAgentId(ctx, "registrationMonitors", args.agentId),
+      deleteByAgentId(ctx, "pendingActions", args.agentId),
+      deleteByAgentId(ctx, "customWorkflows", args.agentId),
+    ]);
+
+    await deleteDoc(ctx, args.agentId);
+
+    return {
+      deletedAgentId: args.agentId,
+      deleteMode,
+      operationEvent,
+    };
+  },
+});
 
 export { deleteAgent as delete };
-
-export function getScheduledTaskById(taskId: string): ScheduledTaskRecord | undefined {
-  return getRuntimeStore().scheduledTasks.get(taskId);
-}
-
-export function listScheduledTasksByAgent(agentId: string): ScheduledTaskRecord[] {
-  return [...getRuntimeStore().scheduledTasks.values()].filter((task) => task.agentId === agentId);
-}
-
-export interface RunTypeInput {
-  agentId: string;
-  runType: RunType;
-}
-
-function createScheduledTask(agentId: string, schedule: string, nextRunAt: string): ScheduledTaskRecord {
-  const task: ScheduledTaskRecord = {
-    id: nextId("scheduled_task"),
-    agentId,
-    schedule,
-    nextRunAt,
-    state: "scheduled",
-    createdAt: new Date().toISOString(),
-  };
-
-  getRuntimeStore().scheduledTasks.set(task.id, task);
-  return task;
-}
-
-function cancelScheduledTask(taskId: string): { cancelled: boolean; taskId: string } {
-  const store = getRuntimeStore();
-  const task = store.scheduledTasks.get(taskId);
-  if (!task || task.state === "cancelled") {
-    return { cancelled: false, taskId };
-  }
-
-  store.scheduledTasks.set(taskId, {
-    ...task,
-    state: "cancelled",
-    cancelledAt: new Date().toISOString(),
-  });
-
-  return { cancelled: true, taskId };
-}

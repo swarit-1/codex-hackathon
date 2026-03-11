@@ -1,47 +1,101 @@
-import { getRuntimeStore, nextId } from "./runtimeStore.ts";
-import type { AgentLogRecord } from "./types/contracts.ts";
+import { mutation, query } from "./_generated/server";
+import { getDoc, queryByIndex } from "./lib/db";
+import { appendAgentLog } from "./lib/logging";
+import { paginateItems } from "./lib/pagination";
+import { toAgentLogRecord, toAgentRecord } from "./lib/records";
+import {
+  agentLogAppendArgs,
+  agentLogListArgs,
+  agentLogListByUserArgs,
+} from "./lib/validators";
+import { notFoundError } from "./lib/errors";
+import {
+  assertCanManageAgent,
+  assertUserOwnsResource,
+  resolveActingUserId,
+} from "./security/authz";
+import type { AgentLogRecord, AgentRecord } from "./types/contracts";
 
-export interface AppendLogInput {
-  agentId: string;
-  event: AgentLogRecord["event"];
-  details?: Record<string, unknown>;
-  scenarioId?: string;
-  timestamp?: string;
-}
+export const append = mutation({
+  args: agentLogAppendArgs,
+  handler: async (ctx, args): Promise<AgentLogRecord> => {
+    const agent = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
 
-export interface LogPagination {
-  limit?: number;
-  cursor?: number;
-}
+    if (!agent) {
+      throw notFoundError("agent not found", {
+        agentId: args.agentId,
+      });
+    }
 
-export function append(payload: AppendLogInput): AgentLogRecord {
-  const store = getRuntimeStore();
-  const log: AgentLogRecord = {
-    id: nextId("log"),
-    agentId: payload.agentId,
-    timestamp: payload.timestamp ?? new Date().toISOString(),
-    event: payload.event,
-    details: payload.details ?? {},
-    scenarioId: payload.scenarioId,
-  };
-  store.agentLogs.set(log.id, log);
-  return log;
-}
+    const actingUserId = await resolveActingUserId(ctx, String((agent as any).userId));
+    await assertCanManageAgent(ctx, toAgentRecord(agent as any), actingUserId ?? String((agent as any).userId));
 
-export function list(agentId: string, pagination: LogPagination = {}): AgentLogRecord[] {
-  const store = getRuntimeStore();
-  const allLogs = [...store.agentLogs.values()]
-    .filter((log) => log.agentId === agentId)
-    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    return appendAgentLog(ctx, {
+      agentId: args.agentId,
+      event: args.event,
+      level: args.level,
+      details: args.details,
+      screenshots: args.screenshots,
+      scenarioId: args.scenarioId,
+    });
+  },
+});
 
-  const start = Math.max(0, pagination.cursor ?? 0);
-  const limit = Math.max(1, pagination.limit ?? 100);
-  return allLogs.slice(start, start + limit);
-}
+export const list = query({
+  args: agentLogListArgs,
+  handler: async (ctx, args) => {
+    const agent = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
 
-export function listByScenario(scenarioId: string): AgentLogRecord[] {
-  const store = getRuntimeStore();
-  return [...store.agentLogs.values()]
-    .filter((log) => log.scenarioId === scenarioId)
-    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-}
+    if (!agent) {
+      throw notFoundError("agent not found", {
+        agentId: args.agentId,
+      });
+    }
+
+    const actingUserId = await resolveActingUserId(ctx, String((agent as any).userId));
+    await assertCanManageAgent(ctx, toAgentRecord(agent as any), actingUserId ?? String((agent as any).userId));
+
+    const logs = await queryByIndex<Omit<AgentLogRecord, "id">>(
+      ctx,
+      "agentLogs",
+      "by_agentId_timestamp",
+      [["agentId", args.agentId]]
+    );
+
+    const sortedLogs = logs
+      .map((log) => toAgentLogRecord(log as any))
+      .sort((left, right) => right.timestamp - left.timestamp);
+
+    return paginateItems(sortedLogs, args);
+  },
+});
+
+export const listByUser = query({
+  args: agentLogListByUserArgs,
+  handler: async (ctx, args) => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
+
+    const agentDocs = await queryByIndex<Omit<AgentRecord, "id">>(
+      ctx,
+      "agents",
+      "by_userId",
+      [["userId", args.userId]]
+    );
+
+    const logDocs = await Promise.all(
+      agentDocs.map((agent) =>
+        queryByIndex<Omit<AgentLogRecord, "id">>(ctx, "agentLogs", "by_agentId_timestamp", [
+          ["agentId", String((agent as any)._id)],
+        ])
+      )
+    );
+
+    const logs = logDocs
+      .flat()
+      .map((log) => toAgentLogRecord(log as any))
+      .sort((left, right) => right.timestamp - left.timestamp);
+
+    return paginateItems(logs, args);
+  },
+});

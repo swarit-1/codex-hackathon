@@ -1,63 +1,113 @@
-import { getRuntimeStore, nextId } from "./runtimeStore.ts";
-import type { ScholarshipRecord, ScholarshipStatus } from "./types/contracts.ts";
+import { mutation, query } from "./_generated/server";
+import { getDoc, insertDoc, patchDoc, queryByIndex } from "./lib/db";
+import { notFoundError } from "./lib/errors";
+import { paginateItems } from "./lib/pagination";
+import { toScholarshipRecord, toAgentRecord } from "./lib/records";
+import {
+  scholarshipListArgs,
+  scholarshipUpsertFromRunArgs,
+} from "./lib/validators";
+import {
+  assertCanManageAgent,
+  assertUserOwnsResource,
+  resolveActingUserId,
+} from "./security/authz";
+import type { AgentRecord, ScholarshipRecord } from "./types/contracts";
 
-export interface ScholarshipFilters {
-  userId?: string;
-  agentId?: string;
-  status?: ScholarshipStatus;
-}
+export const listByUser = query({
+  args: scholarshipListArgs,
+  handler: async (ctx, args) => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
-export interface UpsertScholarshipInput {
-  userId: string;
-  agentId: string;
-  title: string;
-  source: string;
-  deadline: string;
-  eligibility: string;
-  matchScore: number;
-  status: ScholarshipStatus;
-  missingFields?: string[];
-}
+    const scholarships = await queryByIndex<Omit<ScholarshipRecord, "id">>(
+      ctx,
+      "scholarships",
+      "by_userId",
+      [["userId", args.userId]]
+    );
 
-export function upsertFromRun(payload: UpsertScholarshipInput): ScholarshipRecord {
-  const store = getRuntimeStore();
-  const existing = [...store.scholarships.values()].find(
-    (item) => item.agentId === payload.agentId && item.title === payload.title,
-  );
+    const filtered = scholarships
+      .map((scholarship) => toScholarshipRecord(scholarship as any))
+      .filter((scholarship) => !args.status || scholarship.status === args.status)
+      .sort((left, right) => right.updatedAt - left.updatedAt);
 
-  const updated: ScholarshipRecord = {
-    id: existing?.id ?? nextId("scholarship"),
-    userId: payload.userId,
-    agentId: payload.agentId,
-    title: payload.title,
-    source: payload.source,
-    deadline: payload.deadline,
-    eligibility: payload.eligibility,
-    matchScore: payload.matchScore,
-    status: payload.status,
-    missingFields: payload.missingFields ?? existing?.missingFields ?? [],
-    updatedAt: new Date().toISOString(),
-  };
+    return paginateItems(filtered, args);
+  },
+});
 
-  store.scholarships.set(updated.id, updated);
-  return updated;
-}
+export const upsertFromRun = mutation({
+  args: scholarshipUpsertFromRunArgs,
+  handler: async (ctx, args): Promise<ScholarshipRecord> => {
+    const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
 
-export function listByUser(filters: ScholarshipFilters = {}): ScholarshipRecord[] {
-  return [...getRuntimeStore().scholarships.values()].filter((item) => {
-    if (filters.userId && item.userId !== filters.userId) {
-      return false;
+    if (!agentDoc) {
+      throw notFoundError("agent not found", {
+        agentId: args.agentId,
+      });
     }
-    if (filters.agentId && item.agentId !== filters.agentId) {
-      return false;
-    }
-    if (filters.status && item.status !== filters.status) {
-      return false;
-    }
-    return true;
-  });
-}
 
-export function listByAgent(agentId: string): ScholarshipRecord[] {
-  return listByUser({ agentId });
-}
+    const agent = toAgentRecord(agentDoc as any);
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertCanManageAgent(ctx, agent, actingUserId ?? args.userId);
+
+    const existing = (
+      await queryByIndex<Omit<ScholarshipRecord, "id">>(ctx, "scholarships", "by_agentId", [["agentId", args.agentId]])
+    ).find(
+      (scholarship) =>
+        scholarship.title === args.title && scholarship.source === args.source
+    );
+
+    const timestamp = Date.now();
+
+    if (existing) {
+      await patchDoc(ctx, existing._id, {
+        deadline: args.deadline,
+        eligibility: args.eligibility,
+        matchScore: args.matchScore,
+        status: args.status,
+        missingFields: args.missingFields,
+        updatedAt: timestamp,
+      });
+
+      return {
+        ...toScholarshipRecord(existing as any),
+        deadline: args.deadline,
+        eligibility: args.eligibility,
+        matchScore: args.matchScore,
+        status: args.status,
+        missingFields: args.missingFields,
+        updatedAt: timestamp,
+      };
+    }
+
+    const id = await insertDoc(ctx, "scholarships", {
+      userId: args.userId,
+      agentId: args.agentId,
+      title: args.title,
+      source: args.source,
+      deadline: args.deadline,
+      eligibility: args.eligibility,
+      matchScore: args.matchScore,
+      status: args.status,
+      missingFields: args.missingFields,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+
+    return {
+      id,
+      userId: args.userId,
+      agentId: args.agentId,
+      title: args.title,
+      source: args.source,
+      deadline: args.deadline,
+      eligibility: args.eligibility,
+      matchScore: args.matchScore,
+      status: args.status,
+      missingFields: args.missingFields,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  },
+});

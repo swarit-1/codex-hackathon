@@ -5,12 +5,262 @@ export type PendingActionType = "essay" | "detail" | "confirmation";
 export type TemplateSource = "dev" | "student";
 export type SubmissionStatus = "draft" | "pending_review" | "approved" | "rejected";
 export type TemplateVisibility = "private" | "public";
-
-export type AgentType = "scholar" | "reg" | "custom";
 export type AgentOwnerType = "first_party" | "student" | "generated";
+export type AgentType = "scholar" | "reg" | "custom";
+export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
+export type AuthMethod = "email" | "ut_sso" | "demo";
+export type LogLevel = "info" | "warning" | "error";
+export type ReviewDecision = "approved" | "rejected";
+export type WorkflowSourceAlias = "model_to_agent_studio" | "flowforge";
+export type BackendErrorCode =
+  | "PHASE_2_NOT_IMPLEMENTED"
+  | "VALIDATION_ERROR"
+  | "INVALID_STATE"
+  | "FORBIDDEN"
+  | "NOT_FOUND";
+export type RuntimeRunType = "manual" | "scheduled" | "resume";
+export type RunTriggerSource = "my_agents" | "scheduler" | "pending_action" | "webhook";
+export type AgentOperationType = "run_now" | "schedule_update" | "delete";
+export type AgentOperationStatus = "accepted" | "deferred" | "rejected";
+export type AgentDeleteMode = "archive_only" | "cancel_then_archive";
+export type ScenarioId =
+  | "scholarbot_happy_path"
+  | "regbot_happy_path"
+  | "flowforge_happy_path"
+  | "regbot_duo_timeout"
+  | "webhook_retry_path"
+  | "marketplace_install_dev_template"
+  | "marketplace_install_student_template"
+  | "submission_pending_to_approved"
+  | "my_agents_run_now"
+  | "my_agents_schedule_update";
+
+// Dev3 legacy run types (kept for backward compatibility with runtime store)
 export type RunType = "install" | "manual" | "schedule" | "resume" | "webhook";
 export type AgentRunState = "idle" | "running" | "paused" | "completed" | "failed" | "cancelled";
 export type AgentControlAction = "run_now" | "update_schedule" | "delete" | "cancel_run";
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+export interface ScheduleConfig {
+  enabled: boolean;
+  cron: string;
+  timezone: string;
+  jitterMinutes?: number;
+}
+
+export interface ConfigEnvelope {
+  schemaVersion: string;
+  inputSchema: JsonObject;
+  defaultConfig: JsonObject;
+  defaultSchedule?: ScheduleConfig;
+  currentConfig?: JsonObject;
+}
+
+export interface TemplateDraftPayload {
+  title: string;
+  description: string;
+  category: string;
+  templateType: AgentType;
+  visibility?: TemplateVisibility;
+  templateConfig: ConfigEnvelope;
+}
+
+export interface PaginationArgs {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+export interface MarketplaceTemplateFilters extends PaginationArgs {
+  source: TemplateSource;
+  category?: string;
+  visibility?: TemplateVisibility;
+  ownerUserId?: string;
+}
+
+export interface AgentListFilters extends PaginationArgs {
+  userId: string;
+  status?: AgentStatus;
+  ownerType?: AgentOwnerType;
+  type?: AgentType;
+}
+
+export interface AgentLogListArgs extends PaginationArgs {
+  agentId: string;
+}
+
+export interface OperationTrace {
+  traceId: string;
+  emittedAt: number;
+  source: RunTriggerSource;
+  scenarioId?: ScenarioId;
+}
+
+export interface AgentOperationEvent {
+  agentId: string;
+  operation: AgentOperationType;
+  status: AgentOperationStatus;
+  message: string;
+  trace: OperationTrace;
+  metadata?: JsonObject;
+}
+
+export interface RuntimeHandoffPayload {
+  agentId: string;
+  runType: RuntimeRunType;
+  source: RunTriggerSource;
+  requestedAt: number;
+  traceId: string;
+  requestedByUserId?: string;
+  scenarioId?: ScenarioId;
+  schedule?: ScheduleConfig;
+  metadata?: JsonObject;
+}
+
+export interface RuntimeWebhookPayload {
+  agentId: string;
+  event: string;
+  status: AgentRunStatus;
+  occurredAt: number;
+  traceId: string;
+  runType?: RuntimeRunType;
+  scenarioId?: ScenarioId;
+  details?: JsonObject;
+}
+
+export interface BackendScenarioFixture {
+  scenarioId: ScenarioId;
+  title: string;
+  summary: string;
+  agent: AgentRecord;
+  operationEvent?: AgentOperationEvent;
+  handoffPayload?: RuntimeHandoffPayload;
+  expectedLogs: Array<{
+    event: string;
+    level: LogLevel;
+    scenarioId: ScenarioId;
+    details: JsonObject;
+  }>;
+}
+
+export interface TemplateInstallResult {
+  agent: AgentRecord;
+  template: MarketplaceTemplateRecord;
+  installed: boolean;
+}
+
+export interface TemplateReviewResult {
+  submission: TemplateSubmissionRecord;
+  template?: MarketplaceTemplateRecord;
+}
+
+export interface AgentRunNowResult {
+  agent: AgentRecord;
+  operationEvent: AgentOperationEvent;
+  handoffPayload: RuntimeHandoffPayload;
+  alreadyRunning: boolean;
+}
+
+export interface AgentScheduleUpdateResult {
+  agent: AgentRecord;
+  operationEvent: AgentOperationEvent;
+}
+
+export interface AgentDeleteResult {
+  deletedAgentId: string;
+  deleteMode: AgentDeleteMode;
+  operationEvent: AgentOperationEvent;
+}
+
+export interface FlowforgeWorkflowSpecResult {
+  sourceAlias: WorkflowSourceAlias;
+  scenarioId: ScenarioId;
+  templateType: AgentType;
+  title: string;
+  summary: string;
+  spec: JsonObject;
+  draftPayload: TemplateDraftPayload;
+}
+
+export interface FlowforgeAgentScriptResult {
+  sourceAlias: WorkflowSourceAlias;
+  scenarioId: ScenarioId;
+  script: string;
+  entrypoint: string;
+  checksum: string;
+  spec: JsonValue;
+}
+
+export interface OrchestratorTriggerRunResult {
+  agent: AgentRecord;
+  operationEvent: AgentOperationEvent;
+  handoffPayload: RuntimeHandoffPayload;
+  alreadyRunning: boolean;
+}
+
+export interface OrchestratorWebhookResult {
+  agent: AgentRecord;
+  eventPayload: RuntimeWebhookPayload;
+  duplicateIgnored: boolean;
+}
+
+export interface OrchestratorResumeResult {
+  agent: AgentRecord;
+  pendingAction: PendingActionRecord;
+  operationEvent: AgentOperationEvent;
+  handoffPayload: RuntimeHandoffPayload;
+  alreadyRunning: boolean;
+}
+
+export interface UserProfileRecord {
+  id: string;
+  name: string;
+  email: string;
+  eid?: string;
+  authMethod: AuthMethod;
+  profileData?: JsonValue;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MarketplaceTemplateRecord {
+  id: string;
+  title: string;
+  description: string;
+  source: TemplateSource;
+  category: string;
+  visibility: TemplateVisibility;
+  templateType: AgentType;
+  installCount: number;
+  ownerUserId?: string;
+  templateConfig: ConfigEnvelope;
+  createdAt: number;
+  updatedAt: number;
+  approvedAt?: number;
+  archivedAt?: number;
+}
+
+export interface TemplateSubmissionRecord {
+  id: string;
+  userId: string;
+  templateId?: string;
+  draftPayload: TemplateDraftPayload;
+  status: SubmissionStatus;
+  reviewerId?: string;
+  reviewNotes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export interface AgentRecord {
   id: string;
@@ -19,56 +269,14 @@ export interface AgentRecord {
   ownerType: AgentOwnerType;
   type: AgentType;
   status: AgentStatus;
-  config: Record<string, unknown>;
-  schedule?: string;
-  lastRunStatus?: "success" | "paused" | "failed";
-  lastRunAt?: string;
-  nextRunAt?: string;
+  config: ConfigEnvelope;
+  schedule: ScheduleConfig;
+  lastRunStatus: AgentRunStatus;
+  lastRunAt?: number;
+  nextRunAt?: number;
   browserUseTaskId?: string;
-  currentRunId?: string;
-  currentRunState: AgentRunState;
-  scheduledTaskId?: string;
-  lastControlAction?: AgentControlAction;
-  lastControlActionAt?: string;
-  deletedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ScheduledTaskRecord {
-  id: string;
-  agentId: string;
-  schedule: string;
-  nextRunAt: string;
-  state: "scheduled" | "cancelled";
-  createdAt: string;
-  cancelledAt?: string;
-}
-
-export interface MarketplaceTemplate {
-  id: string;
-  title: string;
-  description: string;
-  source: TemplateSource;
-  visibility: TemplateVisibility;
-  category: string;
-  installCount: number;
-  templateConfig: Record<string, unknown>;
-  agentType: AgentType;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface TemplateSubmission {
-  id: string;
-  userId: string;
-  templateId?: string;
-  draftPayload: Record<string, unknown>;
-  status: SubmissionStatus;
-  reviewerId?: string;
-  reviewNotes?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ScholarshipRecord {
@@ -77,12 +285,13 @@ export interface ScholarshipRecord {
   agentId: string;
   title: string;
   source: string;
-  deadline: string;
-  eligibility: string;
-  matchScore: number;
+  deadline?: number;
+  eligibility?: JsonValue;
+  matchScore?: number;
   status: ScholarshipStatus;
-  missingFields: string[];
-  updatedAt: string;
+  missingFields?: string[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface RegistrationMonitorRecord {
@@ -93,9 +302,9 @@ export interface RegistrationMonitorRecord {
   uniqueId: string;
   semester: string;
   status: MonitorStatus;
-  pollIntervalMinutes: number;
-  lastCheckedAt?: string;
-  updatedAt: string;
+  pollInterval: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface PendingActionRecord {
@@ -104,20 +313,36 @@ export interface PendingActionRecord {
   agentId: string;
   type: PendingActionType;
   prompt: string;
-  response?: string;
-  resolvedAt?: string;
-  createdAt: string;
+  response?: JsonValue;
+  resolvedAt?: number;
+  createdAt: number;
+}
+
+export interface CustomWorkflowRecord {
+  id: string;
+  userId: string;
+  agentId?: string;
+  sourceAlias: WorkflowSourceAlias;
+  prompt: string;
+  spec?: JsonValue;
+  generatedScript?: string;
+  templateSubmissionId?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface AgentLogRecord {
   id: string;
   agentId: string;
-  timestamp: string;
-  event: "start" | "step" | "pause" | "resume" | "retry" | "success" | "failure";
-  details: Record<string, unknown>;
-  scenarioId?: string;
+  timestamp: number;
+  event: string;
+  level: LogLevel;
+  details: JsonValue;
+  screenshots?: string[];
+  scenarioId?: ScenarioId;
 }
 
+// Dev3 legacy interface (kept for backward compatibility with runtime store)
 export interface RuntimeRunContext {
   agentId: string;
   runId: string;
@@ -126,4 +351,15 @@ export interface RuntimeRunContext {
   status: AgentStatus;
   timestamp: string;
   details: Record<string, unknown>;
+}
+
+// Dev3 legacy interface (kept for backward compatibility with runtime store)
+export interface ScheduledTaskRecord {
+  id: string;
+  agentId: string;
+  schedule: string;
+  nextRunAt: string;
+  state: "scheduled" | "cancelled";
+  createdAt: string;
+  cancelledAt?: string;
 }

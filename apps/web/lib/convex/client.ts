@@ -1,1 +1,1 @@
-export const convexClientPlaceholder = "TODO: wire Convex client";
+export { ConvexClientProvider } from "./provider";
