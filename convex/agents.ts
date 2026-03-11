@@ -296,7 +296,7 @@ export const updateSchedule = mutation({
       emittedAt: timestamp,
       message: "schedule updated successfully",
       metadata: {
-        schedule,
+        schedule: schedule as any,
       },
     });
 

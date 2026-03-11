@@ -81,22 +81,34 @@ export function MarketplaceCard({ template }: { template: MarketplaceTemplate })
         </div>
       </div>
       <div className="card-actions">
-        <button type="button">Install template</button>
-        <button className="secondary" type="button">
+        <Link className="button-link" href="/my-agents">
+          Install template
+        </Link>
+        <Link className="button-link secondary" href={`/marketplace#${template.id}`}>
           View details
-        </button>
+        </Link>
       </div>
     </article>
   );
 }
 
-export function FilterBar({ options }: { options: FilterOption[] }) {
+export function FilterBar({
+  options,
+  activeValue,
+  onChange,
+}: {
+  options: FilterOption[];
+  activeValue: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <div className="filter-bar" role="toolbar" aria-label="Filters">
-      {options.map((option, index) => (
+      {options.map((option) => (
         <button
           key={option.value}
-          className={index === 0 ? "filter-pill active" : "filter-pill"}
+          aria-pressed={activeValue === option.value}
+          className={activeValue === option.value ? "filter-pill active" : "filter-pill"}
+          onClick={() => onChange(option.value)}
           type="button"
         >
           {option.label}
@@ -139,16 +151,15 @@ export function AgentTable({ agents }: { agents: Agent[] }) {
         </tbody>
       </table>
       <div className="table-actions">
-        <button type="button">Pause / resume</button>
-        <button className="secondary" type="button">
-          Run now
-        </button>
-        <button className="secondary" type="button">
-          Edit schedule
-        </button>
-        <button className="secondary danger" type="button">
-          Delete
-        </button>
+        <Link className="button-link" href="/marketplace">
+          Install from marketplace
+        </Link>
+        <Link className="button-link secondary" href="/studio">
+          Build a workflow
+        </Link>
+        <Link className="button-link secondary" href="/settings">
+          Review settings
+        </Link>
       </div>
     </div>
   );

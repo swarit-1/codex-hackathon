@@ -56,6 +56,8 @@ export default function StudioPage() {
         <SectionHeading
           title="Current drafts"
           description="Generated workflows should remain visible after creation so students can refine, deploy, or publish them later."
+          actionHref="/my-agents"
+          actionLabel="Check deployed agents"
         />
         <StudioQueue drafts={drafts} />
       </section>

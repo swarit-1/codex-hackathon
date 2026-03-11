@@ -94,7 +94,7 @@ async function assertHasElevatedRole(
   const roles = getRoleSet(user);
 
   if (!roles.has("moderator") && !roles.has("admin")) {
-    throw forbiddenError(message, metadata);
+    throw forbiddenError(message, metadata as any);
   }
 
   return user;

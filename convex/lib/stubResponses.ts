@@ -1,4 +1,4 @@
-import { action, mutation, query, type ValidatorMap } from "../_generated/server";
+import { action, mutation, query } from "../_generated/server";
 import type { PaginatedResult } from "../types/contracts";
 import { phaseNotImplementedError } from "./errors";
 
@@ -15,52 +15,52 @@ export function emptyPaginatedResult<T>(): PaginatedResult<T> {
   };
 }
 
-export function createNullQuery<TResult, TArgs = Record<string, unknown>>(
-  args: ValidatorMap,
+export function createNullQuery<TResult>(
+  args: any,
   _functionName: string
 ) {
-  return query<TArgs, TResult | null>({
+  return query({
     args,
-    handler: async () => null,
+    handler: async (): Promise<TResult | null> => null,
   });
 }
 
-export function createEmptyListQuery<TItem, TArgs = Record<string, unknown>>(
-  args: ValidatorMap,
+export function createEmptyListQuery<TItem>(
+  args: any,
   _functionName: string
 ) {
-  return query<TArgs, PaginatedResult<TItem>>({
+  return query({
     args,
     handler: async () => emptyPaginatedResult<TItem>(),
   });
 }
 
-export function createNotImplementedQuery<TResult = never, TArgs = Record<string, unknown>>(
-  args: ValidatorMap,
+export function createNotImplementedQuery<TResult = never>(
+  args: any,
   functionName: string
 ) {
-  return query<TArgs, TResult>({
+  return query({
     args,
-    handler: async () => throwPhase2NotImplemented(functionName),
+    handler: async (): Promise<TResult> => throwPhase2NotImplemented(functionName),
   });
 }
 
-export function createNotImplementedMutation<TResult = never, TArgs = Record<string, unknown>>(
-  args: ValidatorMap,
+export function createNotImplementedMutation<TResult = never>(
+  args: any,
   functionName: string
 ) {
-  return mutation<TArgs, TResult>({
+  return mutation({
     args,
-    handler: async () => throwPhase2NotImplemented(functionName),
+    handler: async (): Promise<TResult> => throwPhase2NotImplemented(functionName),
   });
 }
 
-export function createNotImplementedAction<TResult = never, TArgs = Record<string, unknown>>(
-  args: ValidatorMap,
+export function createNotImplementedAction<TResult = never>(
+  args: any,
   functionName: string
 ) {
-  return action<TArgs, TResult>({
+  return action({
     args,
-    handler: async () => throwPhase2NotImplemented(functionName),
+    handler: async (): Promise<TResult> => throwPhase2NotImplemented(functionName),
   });
 }
