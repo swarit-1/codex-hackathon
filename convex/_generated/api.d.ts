@@ -35,6 +35,7 @@ import type * as marketplace from "../marketplace.js";
 import type * as orchestrator from "../orchestrator.js";
 import type * as pendingActions from "../pendingActions.js";
 import type * as registrationMonitors from "../registrationMonitors.js";
+import type * as runtime from "../runtime.js";
 import type * as runtimeStore from "../runtimeStore.js";
 import type * as scholarships from "../scholarships.js";
 import type * as security_authz from "../security/authz.js";
@@ -77,6 +78,7 @@ declare const fullApi: ApiFromModules<{
   orchestrator: typeof orchestrator;
   pendingActions: typeof pendingActions;
   registrationMonitors: typeof registrationMonitors;
+  runtime: typeof runtime;
   runtimeStore: typeof runtimeStore;
   scholarships: typeof scholarships;
   "security/authz": typeof security_authz;

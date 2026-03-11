@@ -7,13 +7,13 @@ export function decodeCursor(cursor?: string): number {
     return 0;
   }
 
-  const decoded = Buffer.from(cursor, "base64").toString("utf8");
+  const decoded = atob(cursor);
   const offset = Number.parseInt(decoded, 10);
   return Number.isFinite(offset) && offset >= 0 ? offset : 0;
 }
 
 export function encodeCursor(offset: number): string {
-  return Buffer.from(String(offset), "utf8").toString("base64");
+  return btoa(String(offset));
 }
 
 export function paginateItems<T>(
