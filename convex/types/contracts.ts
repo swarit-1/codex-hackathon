@@ -1,14 +1,15 @@
 export type AgentStatus = "active" | "paused" | "completed" | "error";
 export type ScholarshipStatus = "found" | "applying" | "paused" | "submitted" | "expired";
+export type LabOpeningStatus = "discovered" | "reviewing" | "drafting_email" | "email_ready" | "contacted" | "expired";
 export type MonitorStatus = "watching" | "registered" | "failed";
 export type IntramuralSignupStatus = "searching" | "found" | "pending_confirm" | "registered" | "failed";
 export type IntramuralRole = "captain" | "free_agent";
-export type PendingActionType = "essay" | "detail" | "confirmation";
+export type PendingActionType = "essay" | "detail" | "confirmation" | "email_draft";
 export type TemplateSource = "dev" | "student";
 export type SubmissionStatus = "draft" | "pending_review" | "approved" | "rejected";
 export type TemplateVisibility = "private" | "public";
 export type AgentOwnerType = "first_party" | "student" | "generated";
-export type AgentType = "scholar" | "reg" | "im" | "custom";
+export type AgentType = "scholar" | "reg" | "eureka" | "im" | "custom";
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
 export type AuthMethod = "email" | "ut_sso" | "demo";
 export type LogLevel = "info" | "warning" | "error";
@@ -29,6 +30,7 @@ export type AgentDeleteMode = "archive_only" | "cancel_then_archive";
 export type ScenarioId =
   | "scholarbot_happy_path"
   | "regbot_happy_path"
+  | "eurekabot_happy_path"
   | "flowforge_happy_path"
   | "regbot_duo_timeout"
   | "webhook_retry_path"
@@ -320,6 +322,27 @@ export interface ScholarshipRecord {
   matchScore?: number;
   status: ScholarshipStatus;
   missingFields?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface LabOpeningRecord {
+  id: string;
+  userId: string;
+  agentId: string;
+  labName: string;
+  professorName: string;
+  professorEmail: string;
+  department: string;
+  researchArea: string;
+  source: string;
+  postedDate?: number;
+  deadline?: number;
+  requirements?: string;
+  matchScore?: number;
+  status: LabOpeningStatus;
+  emailDraft?: string;
+  emailSentAt?: number;
   createdAt: number;
   updatedAt: number;
 }

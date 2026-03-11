@@ -2,6 +2,7 @@ import type {
   AgentLogRecord,
   AgentRecord,
   IntramuralSignupRecord,
+  LabOpeningRecord,
   JsonObject,
   MarketplaceTemplateRecord,
   PendingActionRecord,
@@ -16,6 +17,7 @@ interface RuntimeStore {
   marketplaceTemplates: Map<string, MarketplaceTemplateRecord>;
   templateSubmissions: Map<string, TemplateSubmissionRecord>;
   scholarships: Map<string, ScholarshipRecord>;
+  labOpenings: Map<string, LabOpeningRecord>;
   registrationMonitors: Map<string, RegistrationMonitorRecord>;
   intramuralSignups: Map<string, IntramuralSignupRecord>;
   pendingActions: Map<string, PendingActionRecord>;
@@ -27,6 +29,7 @@ interface RuntimeStore {
 export const DEFAULT_USER_ID = "user_demo";
 export const SCHOLARBOT_TEMPLATE_ID = "tpl_dev_scholarbot";
 export const REGBOT_TEMPLATE_ID = "tpl_dev_regbot";
+export const EUREKABOT_TEMPLATE_ID = "tpl_dev_eurekabot";
 export const IMBOT_TEMPLATE_ID = "tpl_dev_imbot";
 export const STUDENT_TEMPLATE_ID = "tpl_student_custom";
 
@@ -35,6 +38,7 @@ const store: RuntimeStore = {
   marketplaceTemplates: new Map(),
   templateSubmissions: new Map(),
   scholarships: new Map(),
+  labOpenings: new Map(),
   registrationMonitors: new Map(),
   intramuralSignups: new Map(),
   pendingActions: new Map(),
@@ -104,6 +108,30 @@ function seedTemplates(): void {
       updatedAt: ts,
     },
     {
+      id: EUREKABOT_TEMPLATE_ID,
+      title: "EurekaBot",
+      description: "Scan UT Eureka for research lab openings, match to your profile, and draft outreach emails to professors.",
+      source: "dev",
+      visibility: "public",
+      category: "research",
+      installCount: 0,
+      templateConfig: createTemplateConfig({
+        sources: ["Eureka", "UT Research Portal"],
+        profile: {
+          name: "UT Student",
+          major: "Computer Science",
+          classification: "Undergraduate",
+          gpa: "3.8",
+          researchInterests: ["machine learning", "systems"],
+          relevantCourses: ["CS 429 Computer Organization", "CS 439 Operating Systems", "CS 378 Machine Learning"],
+          skills: ["Python", "PyTorch", "C++", "Linux"],
+        },
+      }),
+      templateType: "eureka",
+      createdAt: ts,
+      updatedAt: ts,
+    },
+    {
       id: IMBOT_TEMPLATE_ID,
       title: "IMBot",
       description: "First-party intramural sports tracker and registration automation via IMLeagues.",
@@ -149,6 +177,7 @@ export function resetRuntimeStore(): void {
   store.marketplaceTemplates.clear();
   store.templateSubmissions.clear();
   store.scholarships.clear();
+  store.labOpenings.clear();
   store.registrationMonitors.clear();
   store.intramuralSignups.clear();
   store.pendingActions.clear();
