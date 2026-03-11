@@ -1,12 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell, MarketplaceHero, MarketplaceTile, SectionHeading } from "../shared";
-import { useMarketplaceCategories, useMarketplaceTemplates } from "../../lib/hooks";
+import { useMarketplaceCategories, useMarketplaceInstall, useMarketplaceTemplates } from "../../lib/hooks";
+import { getEditableConfigValues } from "../../lib/utils";
+import type { MarketplaceTemplate } from "../../lib/contracts/types";
 
 export function MarketplaceView({ currentPath }: { currentPath: string }) {
+  const router = useRouter();
   const { templates, isLoading } = useMarketplaceTemplates();
   const categories = useMarketplaceCategories();
+  const installTemplate = useMarketplaceInstall();
   const [activeCategory, setActiveCategory] = useState("all");
 
   const filteredTemplates = useMemo(
@@ -22,6 +27,12 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
   const featuredTemplates = filteredTemplates.filter((template) => template.source === "dev").slice(0, 3);
   const communityTemplates = filteredTemplates.filter((template) => template.source === "student");
   const catalogTemplates = [...featuredTemplates, ...communityTemplates];
+
+  const handleInstall = async (template: MarketplaceTemplate) => {
+    const defaultValues = getEditableConfigValues(template.templateConfig);
+    await installTemplate(template, defaultValues);
+    router.push("/my-agents");
+  };
 
   return (
     <AppShell currentPath={currentPath}>
@@ -79,7 +90,7 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
             ) : featuredTemplates.length > 0 ? (
               <div className="store-grid featured">
                 {featuredTemplates.map((template) => (
-                  <MarketplaceTile key={`featured-${template.id}`} template={template} />
+                  <MarketplaceTile key={`featured-${template.id}`} template={template} onInstall={handleInstall} />
                 ))}
               </div>
             ) : (
@@ -98,7 +109,7 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
             ) : catalogTemplates.length > 0 ? (
               <div className="store-grid catalog">
                 {catalogTemplates.map((template) => (
-                  <MarketplaceTile key={template.id} template={template} />
+                  <MarketplaceTile key={template.id} template={template} onInstall={handleInstall} />
                 ))}
               </div>
             ) : (

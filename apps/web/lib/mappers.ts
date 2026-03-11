@@ -103,7 +103,7 @@ function resolveTemplateImage(title: string, iconKey: string) {
     "intramural-sports-bot": "/workflows/intramural-sports-bot.svg",
   };
 
-  return known[slug] ?? `/workflows/${iconKey}.svg`;
+  return known[slug] ?? known[iconKey] ?? "/workflows/scholarbot.svg";
 }
 
 function resolveTemplateIcon(title: string, category: string, source: "dev" | "student") {
