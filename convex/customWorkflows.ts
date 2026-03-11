@@ -1,9 +1,11 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { getDoc, insertDoc, patchDoc, queryByIndex } from "./lib/db";
 import { notFoundError } from "./lib/errors";
+import { paginateItems } from "./lib/pagination";
 import { toAgentRecord, toCustomWorkflowRecord } from "./lib/records";
 import {
   customWorkflowCreateArgs,
+  customWorkflowListArgs,
   customWorkflowUpdateArgs,
 } from "./lib/validators";
 import {
@@ -57,6 +59,27 @@ export const create = mutation({
       createdAt: timestamp,
       updatedAt: timestamp,
     };
+  },
+});
+
+export const listByUser = query({
+  args: customWorkflowListArgs,
+  handler: async (ctx, args) => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
+
+    const workflowDocs = await queryByIndex<Omit<CustomWorkflowRecord, "id">>(
+      ctx,
+      "customWorkflows",
+      "by_userId",
+      [["userId", args.userId]]
+    );
+
+    const workflows = workflowDocs
+      .map((workflow) => toCustomWorkflowRecord(workflow as any))
+      .sort((left, right) => right.updatedAt - left.updatedAt);
+
+    return paginateItems(workflows, args);
   },
 });
 

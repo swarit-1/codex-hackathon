@@ -13,7 +13,7 @@ export async function appendAgentLog(
     agentId: string;
     event: string;
     level?: LogLevel;
-    details: JsonValue;
+    details: any;
     screenshots?: string[];
     scenarioId?: ScenarioId;
     timestamp?: number;

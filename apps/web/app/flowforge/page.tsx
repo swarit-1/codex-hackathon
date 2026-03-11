@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 export default function FlowForgePage() {
-  return <main>FlowForge Panel (Scaffold)</main>;
+  redirect("/studio");
 }

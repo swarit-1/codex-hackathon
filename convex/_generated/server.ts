@@ -1,54 +1,52 @@
-export type ValidatorMap = Record<string, unknown>;
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * Stub server module for local development.
+ * Replaced by `npx convex dev` when connected to a Convex deployment.
+ */
+
+export type ValidatorMap = Record<string, any>;
 
 export interface QueryCtx {
-  db: unknown;
-  auth: unknown;
+  db: any;
+  auth: any;
 }
 
 export interface MutationCtx extends QueryCtx {
-  scheduler: unknown;
+  scheduler: any;
 }
 
 export interface ActionCtx extends QueryCtx {
-  runQuery: unknown;
-  runMutation: unknown;
-  runAction: unknown;
-  scheduler: unknown;
+  runQuery: any;
+  runMutation: any;
+  runAction: any;
+  scheduler: any;
 }
 
-interface FunctionDefinition<TArgs, TResult, TCtx> {
+interface FunctionDefinition<TResult, TCtx> {
   args: ValidatorMap;
-  handler: (ctx: TCtx, args: TArgs) => TResult | Promise<TResult>;
+  handler: (ctx: TCtx, args: any) => TResult | Promise<TResult>;
 }
 
-export function query<TArgs, TResult>(definition: FunctionDefinition<TArgs, TResult, QueryCtx>) {
+export function query<TResult>(definition: FunctionDefinition<TResult, QueryCtx>) {
   return definition;
 }
 
-export function mutation<TArgs, TResult>(
-  definition: FunctionDefinition<TArgs, TResult, MutationCtx>
-) {
+export function mutation<TResult>(definition: FunctionDefinition<TResult, MutationCtx>) {
   return definition;
 }
 
-export function action<TArgs, TResult>(definition: FunctionDefinition<TArgs, TResult, ActionCtx>) {
+export function action<TResult>(definition: FunctionDefinition<TResult, ActionCtx>) {
   return definition;
 }
 
-export function internalQuery<TArgs, TResult>(
-  definition: FunctionDefinition<TArgs, TResult, QueryCtx>
-) {
+export function internalQuery<TResult>(definition: FunctionDefinition<TResult, QueryCtx>) {
   return definition;
 }
 
-export function internalMutation<TArgs, TResult>(
-  definition: FunctionDefinition<TArgs, TResult, MutationCtx>
-) {
+export function internalMutation<TResult>(definition: FunctionDefinition<TResult, MutationCtx>) {
   return definition;
 }
 
-export function internalAction<TArgs, TResult>(
-  definition: FunctionDefinition<TArgs, TResult, ActionCtx>
-) {
+export function internalAction<TResult>(definition: FunctionDefinition<TResult, ActionCtx>) {
   return definition;
 }

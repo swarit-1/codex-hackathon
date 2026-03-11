@@ -280,6 +280,11 @@ export const pendingActionResolveArgs = {
   response: v.any(),
 };
 
+export const pendingActionListArgs = {
+  userId: v.id("users"),
+  ...paginationArgs,
+};
+
 export const customWorkflowCreateArgs = {
   userId: v.id("users"),
   prompt: v.string(),
@@ -288,6 +293,11 @@ export const customWorkflowCreateArgs = {
   generatedScript: v.optional(v.string()),
   agentId: v.optional(v.id("agents")),
   templateSubmissionId: v.optional(v.id("templateSubmissions")),
+};
+
+export const customWorkflowListArgs = {
+  userId: v.id("users"),
+  ...paginationArgs,
 };
 
 export const customWorkflowUpdateArgs = {
@@ -302,6 +312,11 @@ export const agentLogAppendArgs = {
   details: v.any(),
   screenshots: v.optional(v.array(v.string())),
   scenarioId: v.optional(scenarioIdValidator),
+};
+
+export const agentLogListByUserArgs = {
+  userId: v.id("users"),
+  ...paginationArgs,
 };
 
 export const runtimeWebhookPayloadValidator = v.object({

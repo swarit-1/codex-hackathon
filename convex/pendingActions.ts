@@ -1,14 +1,17 @@
-import { mutation } from "./_generated/server";
-import { getDoc, insertDoc, patchDoc } from "./lib/db";
+import { mutation, query } from "./_generated/server";
+import { getDoc, insertDoc, patchDoc, queryByIndex } from "./lib/db";
 import { appendAgentLog } from "./lib/logging";
+import { paginateItems } from "./lib/pagination";
 import { toPendingActionRecord, toAgentRecord } from "./lib/records";
 import {
   pendingActionCreateArgs,
+  pendingActionListArgs,
   pendingActionResolveArgs,
 } from "./lib/validators";
 import { notFoundError } from "./lib/errors";
 import {
   assertCanManageAgent,
+  assertUserOwnsResource,
   resolveActingUserId,
 } from "./security/authz";
 import type { AgentRecord, PendingActionRecord } from "./types/contracts";
@@ -102,5 +105,26 @@ export const resolve = mutation({
       response: args.response,
       resolvedAt,
     };
+  },
+});
+
+export const listByUser = query({
+  args: pendingActionListArgs,
+  handler: async (ctx, args) => {
+    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    await assertUserOwnsResource(ctx, actingUserId, args.userId);
+
+    const docs = await queryByIndex<Omit<PendingActionRecord, "id">>(
+      ctx,
+      "pendingActions",
+      "by_userId",
+      [["userId", args.userId]]
+    );
+
+    const actions = docs
+      .map((action) => toPendingActionRecord(action as any))
+      .sort((left, right) => right.createdAt - left.createdAt);
+
+    return paginateItems(actions, args);
   },
 });
