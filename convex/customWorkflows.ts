@@ -86,42 +86,67 @@ export const listByUser = query({
 export const update = mutation({
   args: customWorkflowUpdateArgs,
   handler: async (ctx, args): Promise<CustomWorkflowRecord> => {
-    const workflowDocs = await queryByIndex<Omit<CustomWorkflowRecord, "id">>(
-      ctx,
-      "customWorkflows",
-      "by_agentId",
-      [["agentId", args.agentId]]
-    );
-    const latestWorkflow = workflowDocs.sort((left, right) => right.updatedAt - left.updatedAt)[0];
+    const workflowDoc = await getDoc<Omit<CustomWorkflowRecord, "id">>(ctx, args.workflowId);
 
-    if (!latestWorkflow) {
-      throw notFoundError("workflow not found for agent", {
-        agentId: args.agentId,
+    if (!workflowDoc) {
+      throw notFoundError("workflow not found", {
+        workflowId: args.workflowId,
       });
     }
 
-    const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, args.agentId);
+    const workflow = toCustomWorkflowRecord(workflowDoc as any);
+    const actingUserId = await resolveActingUserId(ctx, workflow.userId);
+    await assertUserOwnsResource(ctx, actingUserId, workflow.userId);
 
-    if (!agentDoc) {
-      throw notFoundError("agent not found", {
-        agentId: args.agentId,
-      });
+    const patchSource =
+      args.patch && typeof args.patch === "object" && !Array.isArray(args.patch)
+        ? args.patch
+        : {};
+    const updatesFromArgs = {
+      spec: args.spec,
+      generatedScript: args.generatedScript,
+      prompt: args.prompt,
+      agentId: args.agentId,
+      templateSubmissionId: args.templateSubmissionId,
+    };
+    const patch = {
+      ...updatesFromArgs,
+      ...(patchSource as {
+        spec?: unknown;
+        generatedScript?: string;
+        prompt?: string;
+        agentId?: string;
+        templateSubmissionId?: string;
+      }),
+    };
+
+    if (patch.agentId) {
+      const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, patch.agentId);
+
+      if (!agentDoc) {
+        throw notFoundError("agent not found", {
+          agentId: patch.agentId,
+        });
+      }
+
+      const agent = toAgentRecord(agentDoc as any);
+      await assertCanManageAgent(ctx, agent, actingUserId ?? workflow.userId);
     }
-
-    const agent = toAgentRecord(agentDoc as any);
-    const actingUserId = await resolveActingUserId(ctx, agent.userId);
-    await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
 
     const updatedAt = Date.now();
-    await patchDoc(ctx, latestWorkflow._id, {
-      ...args.patch,
-      updatedAt,
-    });
+    // Build update object from explicit allowed fields only
+    const updates: Record<string, unknown> = { updatedAt };
+    if (patch.spec !== undefined) updates.spec = patch.spec;
+    if (patch.generatedScript !== undefined) updates.generatedScript = patch.generatedScript;
+    if (patch.prompt !== undefined) updates.prompt = patch.prompt;
+    if (patch.agentId !== undefined) updates.agentId = patch.agentId;
+    if (patch.templateSubmissionId !== undefined) updates.templateSubmissionId = patch.templateSubmissionId;
+
+    await patchDoc(ctx, args.workflowId, updates);
 
     return {
-      ...toCustomWorkflowRecord(latestWorkflow as any),
-      ...args.patch,
-      updatedAt,
+      ...workflow,
+      ...updates,
     };
   },
 });

@@ -17,7 +17,8 @@ export type BackendErrorCode =
   | "VALIDATION_ERROR"
   | "INVALID_STATE"
   | "FORBIDDEN"
-  | "NOT_FOUND";
+  | "NOT_FOUND"
+  | "RATE_LIMITED";
 export type RuntimeRunType = "manual" | "scheduled" | "resume";
 export type RunTriggerSource = "my_agents" | "scheduler" | "pending_action" | "webhook";
 export type AgentOperationType = "run_now" | "schedule_update" | "delete";

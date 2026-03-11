@@ -68,8 +68,8 @@
 - [ ] dev-built public template listing reads through source + visibility index
 - [ ] student-built public template listing reads through source + visibility index
 - [ ] pending-review moderation queue reads through status + createdAt index
-- [ ] My Agents filtered reads use user/status and user/ownerType indexes
-- [ ] scheduler reads use status + nextRunAt index
+- [x] My Agents filtered reads use user/status and user/ownerType indexes
+- [x] scheduler reads use status + nextRunAt index
 
 ### v1 Freeze Signoff Inputs
 
@@ -92,6 +92,18 @@
 - [x] wire `agents.runNow` to prepare runtime handoff payloads and emit operation events
 - [x] wire `agents.delete` to apply safe delete mode semantics
 - [x] wire `orchestrator.handleWebhook` to reconcile runtime callbacks using shared trace IDs
+
+### Robustness (added in Dev 2 audit)
+
+- [x] orchestrator handlers converted from `action` to `mutation` (ctx.db access fix)
+- [x] cron scheduler implemented (`cron.ts` + `crons.ts` with 1-minute interval)
+- [x] credential vault encryption wired (AES-256-GCM via Web Crypto API)
+- [x] cron parser created for proper next-run-time computation
+- [x] `agents.runNow` rate limiting (30s cooldown)
+- [x] `agents.delete` cancel-then-archive mode actually cancels before deleting
+- [x] marketplace authz check moved before data access
+- [x] webhook dedup scan bounded to 100 recent logs
+- [x] `customWorkflows.update` validator uses explicit fields instead of `v.any()`
 
 ## Phase 5: Observability and Fixture Pack
 

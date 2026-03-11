@@ -42,7 +42,8 @@ export const backendErrorCodeValidator = v.union(
   v.literal("VALIDATION_ERROR"),
   v.literal("INVALID_STATE"),
   v.literal("FORBIDDEN"),
-  v.literal("NOT_FOUND")
+  v.literal("NOT_FOUND"),
+  v.literal("RATE_LIMITED")
 );
 
 export const templateVisibilityValidator = v.union(v.literal("private"), v.literal("public"));
@@ -171,14 +172,20 @@ export const agentLogListArgs = {
   ...paginationArgs,
 };
 
-export const userProfileUpsertArgs = {
-  userId: v.id("users"),
+export const userProfileCreateArgs = {
   name: v.string(),
   email: v.string(),
   eid: v.optional(v.string()),
   authMethod: authMethodValidator,
   profileData: v.optional(v.any()),
 };
+
+export const userProfileUpdateArgs = {
+  userId: v.id("users"),
+  ...userProfileCreateArgs,
+};
+
+export const userProfileUpsertArgs = userProfileUpdateArgs;
 
 export const userProfileGetArgs = {
   userId: v.id("users"),
@@ -301,8 +308,13 @@ export const customWorkflowListArgs = {
 };
 
 export const customWorkflowUpdateArgs = {
-  agentId: v.id("agents"),
-  patch: v.any(),
+  workflowId: v.id("customWorkflows"),
+  patch: v.optional(v.any()),
+  spec: v.optional(v.any()),
+  generatedScript: v.optional(v.string()),
+  prompt: v.optional(v.string()),
+  agentId: v.optional(v.id("agents")),
+  templateSubmissionId: v.optional(v.id("templateSubmissions")),
 };
 
 export const agentLogAppendArgs = {
@@ -333,6 +345,8 @@ export const runtimeWebhookPayloadValidator = v.object({
 export const dashboardGetOverviewArgs = {
   userId: v.id("users"),
 };
+
+export const demoBootstrapCatalogArgs = {};
 
 export const flowforgeGenerateWorkflowSpecArgs = {
   nlDescription: v.string(),

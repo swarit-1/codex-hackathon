@@ -6,7 +6,8 @@ import {
   patchDoc,
   queryByIndex,
 } from "./lib/db";
-import { invalidStateError, notFoundError } from "./lib/errors";
+import { invalidStateError, notFoundError, rateLimitError } from "./lib/errors";
+import { getAgentOrThrow, deleteByAgentId } from "./lib/agentUtils";
 import { appendAgentLog } from "./lib/logging";
 import {
   deriveAgentOwnerType,
@@ -42,29 +43,6 @@ import type {
   AgentScheduleUpdateResult,
   MarketplaceTemplateRecord,
 } from "./types/contracts";
-
-async function getAgentOrThrow(ctx: any, agentId: string): Promise<AgentRecord> {
-  const agentDoc = await getDoc<Omit<AgentRecord, "id">>(ctx, agentId);
-
-  if (!agentDoc) {
-    throw notFoundError("agent not found", {
-      agentId,
-    });
-  }
-
-  return toAgentRecord(agentDoc as any);
-}
-
-async function deleteByAgentId(ctx: any, table: string, agentId: string): Promise<void> {
-  const docs = await queryByIndex<Record<string, unknown>>(
-    ctx,
-    table,
-    "by_agentId",
-    [["agentId", agentId]]
-  );
-
-  await Promise.all(docs.map((doc) => deleteDoc(ctx, doc._id)));
-}
 
 export const create = mutation({
   args: agentCreateArgs,
@@ -177,20 +155,29 @@ export const listByUser = query({
     const actingUserId = await resolveActingUserId(ctx, args.userId);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
-    const agents = await queryByIndex<Omit<AgentRecord, "id">>(
-      ctx,
-      "agents",
-      "by_userId",
-      [["userId", args.userId]]
-    );
+    // Use the most selective index based on provided filters
+    let agents;
+    if (args.status) {
+      agents = await queryByIndex<Omit<AgentRecord, "id">>(
+        ctx, "agents", "by_userId_status",
+        [["userId", args.userId], ["status", args.status]]
+      );
+    } else if (args.ownerType) {
+      agents = await queryByIndex<Omit<AgentRecord, "id">>(
+        ctx, "agents", "by_userId_ownerType",
+        [["userId", args.userId], ["ownerType", args.ownerType]]
+      );
+    } else {
+      agents = await queryByIndex<Omit<AgentRecord, "id">>(
+        ctx, "agents", "by_userId",
+        [["userId", args.userId]]
+      );
+    }
 
     const filteredAgents = agents
       .map((agent) => toAgentRecord(agent as any))
       .filter((agent) => {
-        if (args.status && agent.status !== args.status) {
-          return false;
-        }
-
+        // ownerType may still need filtering when status index was used
         if (args.ownerType && agent.ownerType !== args.ownerType) {
           return false;
         }
@@ -214,7 +201,17 @@ export const runNow = mutation({
     const actingUserId = await resolveActingUserId(ctx, agent.userId);
     await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
 
+    const RUN_NOW_COOLDOWN_MS = 30_000;
     const timestamp = Date.now();
+
+    if (agent.lastRunAt && timestamp - agent.lastRunAt < RUN_NOW_COOLDOWN_MS) {
+      throw rateLimitError("run requests are rate-limited to once every 30 seconds", {
+        agentId: args.agentId,
+        lastRunAt: agent.lastRunAt,
+        cooldownMs: RUN_NOW_COOLDOWN_MS,
+      });
+    }
+
     const alreadyRunning = agent.lastRunStatus === "running";
     const operationEvent = buildAgentOperationEvent({
       agentId: agent.id,
@@ -326,14 +323,25 @@ export const deleteAgent = mutation({
     await assertCanManageAgent(ctx, agent, actingUserId ?? agent.userId);
 
     const deleteMode = assertDeleteAllowed(agent);
+    const timestamp = Date.now();
 
     if (deleteMode === "cancel_then_archive") {
-      throw invalidStateError("running agents cannot be deleted until runtime cancellation is wired", {
+      // Cancel the running agent before proceeding with deletion
+      await patchDoc(ctx, args.agentId, {
+        status: "paused",
+        lastRunStatus: "cancelled",
+        updatedAt: timestamp,
+      });
+
+      await appendAgentLog(ctx, {
         agentId: args.agentId,
+        event: "agent.run.cancelled_for_delete",
+        details: {
+          reason: "agent deletion requested while running",
+          previousStatus: agent.lastRunStatus,
+        },
       });
     }
-
-    const timestamp = Date.now();
     const operationEvent = buildAgentOperationEvent({
       agentId: agent.id,
       operation: "delete",

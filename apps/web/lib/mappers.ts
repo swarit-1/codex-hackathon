@@ -4,6 +4,10 @@ import type {
   MarketplaceTemplate,
   StudioDraft,
 } from "./contracts/types";
+import type {
+  ConfigEnvelope,
+  FlowforgeWorkflowSpecResult,
+} from "@convex/types/contracts";
 
 /**
  * Maps a backend MarketplaceTemplateRecord (from Convex) to the frontend
@@ -23,7 +27,8 @@ export function toMarketplaceTemplate(record: {
     inputSchema?: { fields?: Array<{ label: string }> };
     defaultConfig?: { cadenceLabel?: string; outcomes?: string[] };
     currentConfig?: { cadenceLabel?: string; outcomes?: string[] };
-  };
+  } & ConfigEnvelope;
+  ownerUserId?: string;
   approvedAt?: number;
   archivedAt?: number;
 }): MarketplaceTemplate {
@@ -69,6 +74,10 @@ export function toMarketplaceTemplate(record: {
     scheduleDefault: cadenceLabel,
     setupFields: fields?.map((f) => f.label) ?? [],
     outcomes,
+    templateConfig: record.templateConfig,
+    ownerUserId: record.ownerUserId,
+    approvedAt: record.approvedAt,
+    archivedAt: record.archivedAt,
   };
 }
 
@@ -117,6 +126,7 @@ export function toAgentUI(
     scheduleLabel: record.schedule.enabled
       ? ((record.config.currentConfig as any)?.cadenceLabel ?? record.schedule.cron)
       : "Manual",
+    lastRunStatus: record.lastRunStatus as Agent["lastRunStatus"],
   };
 }
 
@@ -202,10 +212,11 @@ export function toAgentEvent(
 export function toStudioDraft(record: {
   id: string;
   prompt: string;
+  agentId?: string;
   spec?: unknown;
   generatedScript?: string;
 }): StudioDraft {
-  const specResult = record.spec as { title?: string; summary?: string } | null;
+  const specResult = (record.spec as FlowforgeWorkflowSpecResult | null) ?? undefined;
   const hasScript = !!record.generatedScript;
 
   return {
@@ -213,5 +224,10 @@ export function toStudioDraft(record: {
     title: specResult?.title ?? record.prompt.slice(0, 50),
     state: hasScript ? "Spec ready" : "Generating",
     summary: specResult?.summary ?? record.prompt,
+    prompt: record.prompt,
+    agentId: record.agentId,
+    generatedScript: record.generatedScript,
+    specResult,
+    draftPayload: specResult?.draftPayload,
   };
 }

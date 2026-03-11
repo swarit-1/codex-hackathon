@@ -2,6 +2,7 @@ import {
   invalidStateError,
   validationError,
 } from "./errors";
+import { getNextCronTime } from "./cronParser";
 import type {
   AgentLogRecord,
   AgentRecord,
@@ -58,7 +59,12 @@ export function deriveNextRunAt(
     return undefined;
   }
 
-  return timestamp;
+  // Compute the actual next cron fire time instead of returning the current timestamp
+  return getNextCronTime(
+    agent.schedule.cron,
+    timestamp,
+    agent.schedule.timezone
+  ) ?? timestamp;
 }
 
 export function assertPendingActionReadyForResume(
