@@ -2,7 +2,6 @@ import type {
   AgentLogRecord,
   AgentRecord,
   IntramuralSignupRecord,
-  MarketplaceTemplateRecord,
   PendingActionRecord,
   RegistrationMonitorRecord,
   ScholarshipRecord,
@@ -10,9 +9,23 @@ import type {
   TemplateSubmissionRecord,
 } from "./types/contracts.ts";
 
+interface RuntimeMarketplaceTemplate {
+  id: string;
+  title: string;
+  description: string;
+  source: "dev" | "student";
+  visibility: "public" | "private";
+  category: string;
+  installCount: number;
+  templateConfig: Record<string, unknown>;
+  agentType: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface RuntimeStore {
   agents: Map<string, AgentRecord>;
-  marketplaceTemplates: Map<string, MarketplaceTemplateRecord>;
+  marketplaceTemplates: Map<string, RuntimeMarketplaceTemplate>;
   templateSubmissions: Map<string, TemplateSubmissionRecord>;
   scholarships: Map<string, ScholarshipRecord>;
   registrationMonitors: Map<string, RegistrationMonitorRecord>;
