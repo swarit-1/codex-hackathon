@@ -10,6 +10,7 @@
 
 import type * as agentLogs from "../agentLogs.js";
 import type * as agents from "../agents.js";
+import type * as auth from "../auth.js";
 import type * as cron from "../cron.js";
 import type * as crons from "../crons.js";
 import type * as customWorkflows from "../customWorkflows.js";
@@ -34,9 +35,11 @@ import type * as marketplace from "../marketplace.js";
 import type * as orchestrator from "../orchestrator.js";
 import type * as pendingActions from "../pendingActions.js";
 import type * as registrationMonitors from "../registrationMonitors.js";
+import type * as runtimeStore from "../runtimeStore.js";
 import type * as scholarships from "../scholarships.js";
 import type * as security_authz from "../security/authz.js";
 import type * as security_encryption from "../security/encryption.js";
+import type * as security_passwords from "../security/passwords.js";
 import type * as types_contracts from "../types/contracts.js";
 import type * as users from "../users.js";
 
@@ -49,6 +52,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   agentLogs: typeof agentLogs;
   agents: typeof agents;
+  auth: typeof auth;
   cron: typeof cron;
   crons: typeof crons;
   customWorkflows: typeof customWorkflows;
@@ -73,9 +77,11 @@ declare const fullApi: ApiFromModules<{
   orchestrator: typeof orchestrator;
   pendingActions: typeof pendingActions;
   registrationMonitors: typeof registrationMonitors;
+  runtimeStore: typeof runtimeStore;
   scholarships: typeof scholarships;
   "security/authz": typeof security_authz;
   "security/encryption": typeof security_encryption;
+  "security/passwords": typeof security_passwords;
   "types/contracts": typeof types_contracts;
   users: typeof users;
 }>;

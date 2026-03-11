@@ -6,6 +6,7 @@ export {
 export { useInstalledAgents, useAgentEvents, useAgentActions } from "./use-agents";
 export { useStudioDrafts, useStudioActions } from "./use-studio";
 export {
+  useAuthActions,
   useCurrentUser,
   useDemoUser,
   useRequireCurrentUser,

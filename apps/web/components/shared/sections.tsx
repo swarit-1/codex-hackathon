@@ -142,7 +142,10 @@ export function MarketplaceCard({
 
                 if (field.type === "textarea") {
                   return (
-                    <label key={field.key} className="form-field">
+                    <label
+                      key={field.key}
+                      className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                    >
                       <span>{field.label}</span>
                       <textarea
                         onChange={(event) =>
@@ -161,7 +164,10 @@ export function MarketplaceCard({
 
                 if (field.type === "select") {
                   return (
-                    <label key={field.key} className="form-field">
+                    <label
+                      key={field.key}
+                      className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                    >
                       <span>{field.label}</span>
                       <select
                         onChange={(event) =>
@@ -203,7 +209,10 @@ export function MarketplaceCard({
                 }
 
                 return (
-                  <label key={field.key} className="form-field">
+                  <label
+                    key={field.key}
+                    className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
+                  >
                     <span>{field.label}</span>
                     <input
                       onChange={(event) =>

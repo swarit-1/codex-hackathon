@@ -15,19 +15,21 @@ export function useInstalledAgents(): {
   isLoading: boolean;
 } {
   const convexEnabled = useConvexEnabled();
-  const { userId } = useCurrentUser();
+  const { sessionToken, userId } = useCurrentUser();
   const agentsResult = useQuery(
     api.agents.listByUser,
-    convexEnabled && userId
+    convexEnabled && userId && sessionToken
       ? {
+          sessionToken,
           userId: userId as Id<"users">,
         }
       : "skip"
   );
   const pendingActionsResult = useQuery(
     api.pendingActions.listByUser,
-    convexEnabled && userId
+    convexEnabled && userId && sessionToken
       ? {
+          sessionToken,
           userId: userId as Id<"users">,
         }
       : "skip"
@@ -75,8 +77,7 @@ export function useInstalledAgents(): {
     return (agentsResult?.items ?? []).map((record) =>
       toAgentUI(
         record as never,
-        templatesById.get(String(record.id ?? record.templateId))?.title ??
-          templatesById.get(String(record.templateId))?.title,
+        templatesById.get(String(record.templateId))?.title,
         pendingCounts.get(String(record.id))
       )
     );
@@ -96,19 +97,21 @@ export function useAgentEvents(): {
   isLoading: boolean;
 } {
   const convexEnabled = useConvexEnabled();
-  const { userId } = useCurrentUser();
+  const { sessionToken, userId } = useCurrentUser();
   const logsResult = useQuery(
     api.agentLogs.listByUser,
-    convexEnabled && userId
+    convexEnabled && userId && sessionToken
       ? {
+          sessionToken,
           userId: userId as Id<"users">,
         }
       : "skip"
   );
   const agentsResult = useQuery(
     api.agents.listByUser,
-    convexEnabled && userId
+    convexEnabled && userId && sessionToken
       ? {
+          sessionToken,
           userId: userId as Id<"users">,
         }
       : "skip"
@@ -167,36 +170,40 @@ export function useAgentEvents(): {
 
 export function useAgentActions() {
   const convexEnabled = useConvexEnabled();
+  const { sessionToken } = useCurrentUser();
   const runNowMutation = useMutation(api.agents.runNow);
   const updateStatusMutation = useMutation(api.agents.updateStatus);
   const deleteAgentMutation = useMutation(api.agents.deleteAgent);
 
   return {
     runNow: async (agentId: string) => {
-      if (!convexEnabled) {
+      if (!convexEnabled || !sessionToken) {
         return null;
       }
 
       return runNowMutation({
+        sessionToken,
         agentId: agentId as Id<"agents">,
       });
     },
     updateStatus: async (agentId: string, status: Extract<AgentStatus, "active" | "paused">) => {
-      if (!convexEnabled) {
+      if (!convexEnabled || !sessionToken) {
         return null;
       }
 
       return updateStatusMutation({
+        sessionToken,
         agentId: agentId as Id<"agents">,
         status,
       });
     },
     deleteAgent: async (agentId: string) => {
-      if (!convexEnabled) {
+      if (!convexEnabled || !sessionToken) {
         return null;
       }
 
       return deleteAgentMutation({
+        sessionToken,
         agentId: agentId as Id<"agents">,
       });
     },
