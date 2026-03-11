@@ -1,10 +1,10 @@
-import { append as appendLog } from "../../../convex/agentLogs.ts";
 import {
-  create as createMonitor,
-  listByAgent as listMonitorsByAgent,
-  updateStatus as updateMonitorStatus,
-} from "../../../convex/registrationMonitors.ts";
-import { updateById as updateAgentById } from "../../../convex/agents.ts";
+  appendLog,
+  updateAgentById,
+  createMonitor,
+  listMonitorsByAgent,
+  updateMonitorStatus,
+} from "../shared/runtimeAdapters.ts";
 import type { AgentRecord, RuntimeRunContext } from "../../../convex/types/contracts.ts";
 import { performDuoChallenge } from "./duoHandler.ts";
 import { checkSeatAvailability } from "./seatChecker.ts";
@@ -24,10 +24,11 @@ export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRu
     details: { runId: context.runId, message: "RegBot run started" },
   });
 
-  const courseNumber = stringOrDefault(agent.config.courseNumber, "CS 378");
-  const uniqueId = stringOrDefault(agent.config.uniqueId, "12345");
-  const semester = stringOrDefault(agent.config.semester, "Fall 2026");
-  const pollIntervalMinutes = numberOrDefault(agent.config.pollIntervalMinutes, 10);
+  const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+  const courseNumber = stringOrDefault(configObj.courseNumber, "CS 378");
+  const uniqueId = stringOrDefault(configObj.uniqueId, "12345");
+  const semester = stringOrDefault(configObj.semester, "Fall 2026");
+  const pollIntervalMinutes = numberOrDefault(configObj.pollIntervalMinutes, 10);
 
   const monitor =
     listMonitorsByAgent(agent.id)[0] ??
@@ -40,11 +41,11 @@ export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRu
       pollIntervalMinutes,
     });
 
-  const maxPollAttempts = numberOrDefault(agent.config.maxPollAttempts, 3);
+  const maxPollAttempts = numberOrDefault(configObj.maxPollAttempts, 3);
 
   for (let pollAttempt = 1; pollAttempt <= maxPollAttempts; pollAttempt += 1) {
     const seat = checkSeatAvailability(pollAttempt, {
-      seatAvailableOnAttempt: numberOrDefault(agent.config.seatAvailableOnAttempt, 1),
+      seatAvailableOnAttempt: numberOrDefault(configObj.seatAvailableOnAttempt, 1),
     });
 
     appendLog({
@@ -64,8 +65,8 @@ export function runRegBot(agent: AgentRecord, context: RuntimeRunContext): RegRu
 
     for (let duoAttempt = 1; duoAttempt <= DEFAULT_REG_DUO_RETRY_POLICY.maxRetries + 1; duoAttempt += 1) {
       const duo = performDuoChallenge(duoAttempt, {
-        duoTimeoutAttempts: numberOrDefault(agent.config.duoTimeoutAttempts, 0),
-        forceFailure: Boolean(agent.config.forceFailure),
+        duoTimeoutAttempts: numberOrDefault(configObj.duoTimeoutAttempts, 0),
+        forceFailure: Boolean(configObj.forceFailure),
       }, DEFAULT_REG_DUO_RETRY_POLICY);
 
       if (duo.success) {

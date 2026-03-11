@@ -1,7 +1,12 @@
-import { append as appendLog } from "../../../convex/agentLogs.ts";
-import { create as createPendingAction, getById as getPendingAction, resolve as resolvePendingAction } from "../../../convex/pendingActions.ts";
-import { listByAgent, upsertFromRun } from "../../../convex/scholarships.ts";
-import { updateById as updateAgentById } from "../../../convex/agents.ts";
+import {
+  appendLog,
+  updateAgentById,
+  createPendingAction,
+  getPendingActionById as getPendingAction,
+  resolvePendingAction,
+  listScholarshipsByAgent as listByAgent,
+  upsertScholarshipFromRun as upsertFromRun,
+} from "../shared/runtimeAdapters.ts";
 import type { AgentRecord, PendingActionRecord, RuntimeRunContext } from "../../../convex/types/contracts.ts";
 import { matchScholarships } from "./matcher.ts";
 import { nextScholarshipStatus } from "./stateMachine.ts";
@@ -21,8 +26,9 @@ export function runScholarBot(agent: AgentRecord, context: RuntimeRunContext): S
     details: { runId: context.runId, message: "ScholarBot run started" },
   });
 
-  const sources = Array.isArray(agent.config.sources) ? (agent.config.sources as string[]) : [];
-  const profile = (agent.config.profile as Record<string, unknown>) ?? {};
+  const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+  const sources = Array.isArray(configObj.sources) ? (configObj.sources as string[]) : [];
+  const profile = (configObj.profile as Record<string, unknown>) ?? {};
   const matches = matchScholarships(
     {
       major: typeof profile.major === "string" ? profile.major : undefined,

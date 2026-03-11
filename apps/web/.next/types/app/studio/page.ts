@@ -1,4 +1,4 @@
-// File: /Users/joshuawu/codex-hackathon/apps/web/app/studio/page.tsx
+// File: /Users/abhipasam/Documents/codex-hackathon/apps/web/app/studio/page.tsx
 import * as entry from '../../../../app/studio/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
