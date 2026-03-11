@@ -155,6 +155,7 @@ export const updateAgentRunStatus = internalMutation({
 export const launchBrowserTask = internalAction({
   args: {
     agentId: v.string(),
+    runId: v.optional(v.string()),
     agentType: v.string(),
     config: v.any(),
   },
