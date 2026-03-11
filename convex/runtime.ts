@@ -16,6 +16,7 @@ import type {
 
 const BROWSER_USE_API_URL = "https://api.browser-use.com/api/v2";
 
+
 function buildTaskPrompt(agentType: AgentType, config: ConfigEnvelope): string {
   const currentConfig = (config.currentConfig ?? config.defaultConfig) as JsonObject;
   const targetUrl = (currentConfig.targetUrl as string) ?? "";

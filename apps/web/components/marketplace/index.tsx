@@ -12,6 +12,7 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
   const { templates, isLoading } = useMarketplaceTemplates();
   const categories = useMarketplaceCategories();
   const installTemplate = useMarketplaceInstall();
+
   const [activeCategory, setActiveCategory] = useState("all");
 
   const filteredTemplates = useMemo(
@@ -33,6 +34,7 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
     await installTemplate(template, defaultValues);
     router.push("/my-agents");
   };
+
 
   return (
     <AppShell currentPath={currentPath}>
@@ -91,6 +93,7 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
               <div className="store-grid featured">
                 {featuredTemplates.map((template) => (
                   <MarketplaceTile key={`featured-${template.id}`} template={template} onInstall={handleInstall} />
+
                 ))}
               </div>
             ) : (
@@ -110,6 +113,7 @@ export function MarketplaceView({ currentPath }: { currentPath: string }) {
               <div className="store-grid catalog">
                 {catalogTemplates.map((template) => (
                   <MarketplaceTile key={template.id} template={template} onInstall={handleInstall} />
+
                 ))}
               </div>
             ) : (
