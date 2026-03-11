@@ -14,6 +14,7 @@ import { normalizeRuntimeEvent, runtimeEventFromContext, type RawWebhookPayload 
 import { runScholarBot, resumeScholarBot } from "./scholarbot/runner.ts";
 import { runRegBot } from "./regbot/runner.ts";
 import { runEurekaBot, resumeEurekaBot } from "./eurekabot/runner.ts";
+import { runIMBot, resumeIMBot } from "./imbot/runner.ts";
 
 const DEFAULT_SCHOLAR_SEARCH_URL = "https://utexas.scholarships.ngwebsolutions.com/ScholarX_StudentLanding.aspx";
 const DEFAULT_EUREKA_URL = "https://eureka-prod.herokuapp.com/opportunities";
@@ -79,6 +80,8 @@ export async function triggerAgentRun(agentId: string, runType: RunType): Promis
     outcome = runRegBot(agent, context);
   } else if (agent.type === "eureka") {
     outcome = runEurekaBot(agent, context);
+  } else if (agent.type === "im") {
+    outcome = runIMBot(agent, context);
   } else {
     appendLog({
       agentId: agent.id,
@@ -197,7 +200,7 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
 
   const context = buildRunContext(agent, "resume");
 
-  if (agent.type !== "scholar" && agent.type !== "eureka") {
+  if (agent.type !== "scholar" && agent.type !== "eureka" && agent.type !== "im") {
     appendLog({
       agentId: agent.id,
       event: "failure",
@@ -205,11 +208,11 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
       details: {
         runId: context.runId,
         actionId,
-        message: "Pending action resume currently supported only for ScholarBot and EurekaBot",
+        message: "Pending action resume currently supported only for ScholarBot, EurekaBot, and IMBot",
       },
     });
 
-    throw new Error("Pending action resume currently supported only for ScholarBot and EurekaBot");
+    throw new Error("Pending action resume currently supported only for ScholarBot, EurekaBot, and IMBot");
   }
 
   const resumeEvent = runtimeEventFromContext(context, "resume", {
@@ -226,6 +229,8 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
 
   const outcome = agent.type === "eureka"
     ? resumeEurekaBot(agent, context, actionId)
+    : agent.type === "im"
+    ? resumeIMBot(agent, context, actionId)
     : resumeScholarBot(agent, context, actionId);
 
   updateAgentById(agent.id, {
@@ -489,6 +494,65 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
       .join("\n");
   }
 
+  if (agent.type === "im") {
+    const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+    const sports = Array.isArray(configObj.sports) ? (configObj.sports as string[]).join(", ") : "Basketball, Flag Football, Soccer";
+    const division = typeof configObj.division === "string" ? configObj.division : "C";
+    const role = typeof configObj.role === "string" ? configObj.role : "free_agent";
+    const preferredDays = Array.isArray(configObj.preferredDays) ? (configObj.preferredDays as string[]).join(", ") : "Sunday, Tuesday, Thursday";
+    const preferredTime = typeof configObj.preferredTime === "string" ? configObj.preferredTime : "evening";
+    const teamName = typeof configObj.teamName === "string" ? configObj.teamName : "";
+
+    const roleInstructions = role === "captain"
+      ? `You are registering as a team CAPTAIN. Create a team named "${teamName}" in the chosen division and time slot.`
+      : `You are registering as a FREE AGENT. Click "Join As Free Agent" for each matching division.`;
+
+    if (runType === "resume") {
+      return [
+        `Navigate to https://www.imleagues.com/UTexas.`,
+        "The user has confirmed their intramural sport selections.",
+        "Complete the registration process for each confirmed sport/division.",
+        roleInstructions,
+        "If payment is required, pause and report the payment screen details.",
+        "Do NOT submit payment without explicit user approval.",
+      ].join(" ");
+    }
+
+    return [
+      `You are a browser automation agent helping a UT Austin student find and sign up for intramural sports on IMLeagues.`,
+      ``,
+      `GOAL: Navigate to the UT Austin IMLeagues portal, scan for open intramural sports registration, and identify games matching the student's preferences. DO NOT complete registration yet — stop before payment.`,
+      ``,
+      `Student Preferences:`,
+      `  - Sports: ${sports}`,
+      `  - Division/Skill Level: ${division} League (A=Competitive, B=Intermediate, C=Recreational)`,
+      `  - Preferred Days: ${preferredDays}`,
+      `  - Preferred Time: ${preferredTime}`,
+      `  - Role: ${role === "captain" ? `Captain (team name: "${teamName}")` : "Free Agent"}`,
+      ``,
+      `Step-by-step instructions:`,
+      `1. Navigate to https://www.imleagues.com/UTexas. Authenticate via UT Shibboleth if prompted (use UT EID).`,
+      `2. Click on the "Sports" tab to view available intramural sports for the current term.`,
+      `3. For each sport the student is interested in (${sports}):`,
+      `   a. Click on the sport name to see available divisions.`,
+      `   b. Look for the "${division}" division (league). If not found, note the closest available.`,
+      `   c. Check if registration is currently OPEN (dates matter — registration opens at 8am on the listed date).`,
+      `   d. If open, check available time slots and days.`,
+      `   e. Note the registration fee, spots remaining, and registration deadline.`,
+      `4. For matching sports with open registration:`,
+      `   ${roleInstructions}`,
+      `5. STOP before confirming registration or submitting payment.`,
+      `6. Report back: which sports are available, which divisions have open registration, available time slots, fees, and spots remaining.`,
+      ``,
+      `CRITICAL RULES:`,
+      `- DO NOT submit payment or complete final registration.`,
+      `- DO NOT click any "Confirm" or "Pay" button.`,
+      `- If UT Shibboleth login is required, stop and report that authentication is needed.`,
+      `- Registration is first come, first served — note how many spots remain.`,
+      `- If a preferred sport has closed registration, note when the next registration window opens.`,
+    ].filter((line) => line !== "").join("\n");
+  }
+
   return process.env.BROWSER_USE_DEFAULT_TASK_PROMPT ?? "Open the target workflow page and report ready state.";
 }
 
@@ -498,6 +562,9 @@ function buildBrowserUseStartUrl(agent: AgentRecord): string | undefined {
   }
   if (agent.type === "eureka") {
     return resolveEurekaUrl(agent);
+  }
+  if (agent.type === "im") {
+    return "https://www.imleagues.com/UTexas";
   }
   return undefined;
 }

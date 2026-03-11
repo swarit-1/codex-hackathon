@@ -13,6 +13,7 @@ export const MARKETPLACE_INSTALL_DEV_TEMPLATE_SCENARIO = "marketplace_install_de
 export const SCHOLARBOT_HAPPY_PATH_SCENARIO = "scholarbot_happy_path";
 export const REGBOT_HAPPY_PATH_SCENARIO = "regbot_happy_path";
 export const EUREKABOT_HAPPY_PATH_SCENARIO = "eurekabot_happy_path";
+export const IMBOT_HAPPY_PATH_SCENARIO = "imbot_happy_path";
 export const MY_AGENTS_RUN_NOW_SCENARIO = "my_agents_run_now";
 export const MY_AGENTS_SCHEDULE_UPDATE_SCENARIO = "my_agents_schedule_update";
 export const MY_AGENTS_DELETE_SCENARIO = "my_agents_delete";
@@ -25,8 +26,8 @@ export function instantiateTemplateConfig(
     throw new Error(`Phase 1 supports only dev templates, received source: ${template.source}`);
   }
 
-  if (template.agentType !== "scholar" && template.agentType !== "reg" && template.agentType !== "eureka") {
-    throw new Error(`Phase 1 supports only first-party scholar/reg/eureka templates, received: ${template.agentType}`);
+  if (template.agentType !== "scholar" && template.agentType !== "reg" && template.agentType !== "eureka" && template.agentType !== "im") {
+    throw new Error(`Phase 1 supports only first-party scholar/reg/eureka/im templates, received: ${template.agentType}`);
   }
 
   if ((template.templateConfig.requiredApproval as boolean | undefined) === true) {
@@ -49,6 +50,9 @@ export function deriveAgentScenarioId(agentType: AgentType): string {
   }
   if (agentType === "eureka") {
     return EUREKABOT_HAPPY_PATH_SCENARIO;
+  }
+  if (agentType === "im") {
+    return IMBOT_HAPPY_PATH_SCENARIO;
   }
   return "flowforge_happy_path";
 }

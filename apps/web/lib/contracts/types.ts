@@ -12,7 +12,7 @@ export type TemplateSource = "dev" | "student";
 export type SubmissionStatus = "draft" | "pending_review" | "approved" | "rejected";
 export type TemplateVisibility = "private" | "public";
 export type AgentOwnerType = "first_party" | "student" | "generated";
-export type AgentType = "scholar" | "reg" | "eureka" | "custom";
+export type AgentType = "scholar" | "reg" | "eureka" | "custom"| "im";
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
 export type AuthMethod = "email" | "ut_sso" | "demo";
 export type LogLevel = "info" | "warning" | "error";
@@ -29,7 +29,8 @@ export type ScenarioId =
   | "marketplace_install_student_template"
   | "submission_pending_to_approved"
   | "my_agents_run_now"
-  | "my_agents_schedule_update";
+  | "my_agents_schedule_update"
+  | "imbot_happy_path";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
