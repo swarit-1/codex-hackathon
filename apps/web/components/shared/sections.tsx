@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   Agent,
   AgentEvent,
@@ -10,6 +10,11 @@ import type {
   SettingsSection,
   StudioDraft,
 } from "../../lib/contracts/types";
+import {
+  extractConfigFields,
+  getEditableConfigValues,
+  type EditableConfigValue,
+} from "../../lib/utils";
 
 export function SectionHeading({
   title,
@@ -37,7 +42,51 @@ export function SectionHeading({
   );
 }
 
-export function MarketplaceCard({ template }: { template: MarketplaceTemplate }) {
+export function MarketplaceCard({
+  template,
+  installControls,
+}: {
+  template: MarketplaceTemplate;
+  installControls?: {
+    enabled: boolean;
+    isInstalling?: boolean;
+    isInstalled?: boolean;
+    error?: string | null;
+    onInstall?: (
+      template: MarketplaceTemplate,
+      currentValues: Record<string, EditableConfigValue>
+    ) => Promise<void> | void;
+  };
+}) {
+  const { supportedFields, unsupportedFields } = useMemo(
+    () => extractConfigFields(template.templateConfig.inputSchema),
+    [template.templateConfig.inputSchema]
+  );
+  const [isInstallOpen, setIsInstallOpen] = useState(false);
+  const [currentValues, setCurrentValues] = useState<Record<string, EditableConfigValue>>(
+    () => getEditableConfigValues(template.templateConfig)
+  );
+
+  useEffect(() => {
+    setCurrentValues(getEditableConfigValues(template.templateConfig));
+  }, [template.id, template.templateConfig]);
+
+  useEffect(() => {
+    if (installControls?.isInstalled) {
+      setIsInstallOpen(false);
+    }
+  }, [installControls?.isInstalled]);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!installControls?.onInstall) {
+      return;
+    }
+
+    await installControls.onInstall(template, currentValues);
+  };
+
   return (
     <article className="market-card" id={template.id}>
       <div className="market-card-head">
@@ -83,10 +132,143 @@ export function MarketplaceCard({ template }: { template: MarketplaceTemplate })
           </ul>
         </div>
       </div>
+
+      {installControls?.enabled && isInstallOpen ? (
+        <form className="inline-form" onSubmit={handleSubmit}>
+          {supportedFields.length > 0 ? (
+            <div className="field-grid">
+              {supportedFields.map((field) => {
+                const value = currentValues[field.key];
+
+                if (field.type === "textarea") {
+                  return (
+                    <label key={field.key} className="form-field">
+                      <span>{field.label}</span>
+                      <textarea
+                        onChange={(event) =>
+                          setCurrentValues((previousValues) => ({
+                            ...previousValues,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                        required={field.required}
+                        rows={4}
+                        value={String(value ?? "")}
+                      />
+                    </label>
+                  );
+                }
+
+                if (field.type === "select") {
+                  return (
+                    <label key={field.key} className="form-field">
+                      <span>{field.label}</span>
+                      <select
+                        onChange={(event) =>
+                          setCurrentValues((previousValues) => ({
+                            ...previousValues,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                        required={field.required}
+                        value={String(value ?? "")}
+                      >
+                        <option value="">Select an option</option>
+                        {(field.options ?? []).map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                }
+
+                if (field.type === "boolean" || field.type === "checkbox") {
+                  return (
+                    <label key={field.key} className="checkbox-field">
+                      <input
+                        checked={Boolean(value)}
+                        onChange={(event) =>
+                          setCurrentValues((previousValues) => ({
+                            ...previousValues,
+                            [field.key]: event.target.checked,
+                          }))
+                        }
+                        type="checkbox"
+                      />
+                      <span>{field.label}</span>
+                    </label>
+                  );
+                }
+
+                return (
+                  <label key={field.key} className="form-field">
+                    <span>{field.label}</span>
+                    <input
+                      onChange={(event) =>
+                        setCurrentValues((previousValues) => ({
+                          ...previousValues,
+                          [field.key]: event.target.value,
+                        }))
+                      }
+                      required={field.required}
+                      type={field.type === "email" || field.type === "url" ? field.type : "text"}
+                      value={String(value ?? "")}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="form-note">
+              This template can be installed with its backend defaults.
+            </p>
+          )}
+
+          {unsupportedFields.length > 0 ? (
+            <p className="form-note">
+              Some advanced setup fields are not editable yet and will keep their default values.
+            </p>
+          ) : null}
+
+          {installControls.error ? (
+            <p className="form-message error">{installControls.error}</p>
+          ) : null}
+
+          <div className="card-actions">
+            <button disabled={installControls.isInstalling} type="submit">
+              {installControls.isInstalling ? "Installing..." : "Save and install"}
+            </button>
+            <button
+              className="secondary"
+              onClick={() => setIsInstallOpen(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       <div className="card-actions">
-        <Link className="button-link" href="/my-agents">
-          Install template
-        </Link>
+        {installControls?.enabled ? (
+          <button
+            disabled={installControls.isInstalling || installControls.isInstalled}
+            onClick={() => setIsInstallOpen((currentValue) => !currentValue)}
+            type="button"
+          >
+            {installControls.isInstalled
+              ? "Installed"
+              : isInstallOpen
+                ? "Hide setup"
+                : "Install template"}
+          </button>
+        ) : (
+          <Link className="button-link" href="/my-agents">
+            Install template
+          </Link>
+        )}
         <Link className="button-link secondary" href={`/marketplace#${template.id}`}>
           View details
         </Link>
@@ -169,7 +351,31 @@ function ScholarDemoButton() {
   );
 }
 
-export function AgentTable({ agents }: { agents: Agent[] }) {
+function getToggleLabel(agent: Agent): string | null {
+  if (agent.status === "active") {
+    return "Pause";
+  }
+
+  if (agent.status === "paused" || agent.status === "error") {
+    return "Resume";
+  }
+
+  return null;
+}
+
+export function AgentTable({
+  agents,
+  actionControls,
+}: {
+  agents: Agent[];
+  actionControls?: {
+    busyAgentId?: string | null;
+    error?: string | null;
+    onRunNow?: (agentId: string) => Promise<void> | void;
+    onToggleStatus?: (agent: Agent) => Promise<void> | void;
+    onDelete?: (agentId: string) => Promise<void> | void;
+  };
+}) {
   return (
     <div className="table-shell">
       <table className="data-table">
@@ -182,29 +388,68 @@ export function AgentTable({ agents }: { agents: Agent[] }) {
             <th>Pending action</th>
             <th>Schedule</th>
             <th></th>
+            {actionControls ? <th>Actions</th> : null}
           </tr>
         </thead>
         <tbody>
-          {agents.map((agent) => (
-            <tr key={agent.id}>
-              <td>
-                <strong>{agent.name}</strong>
-                <span>{agent.source === "dev" ? "Official template" : "Community template"}</span>
-              </td>
-              <td>
-                <span className={`table-status ${agent.status}`}>{formatStatus(agent.status)}</span>
-              </td>
-              <td>{agent.lastRunLabel}</td>
-              <td>{agent.nextRunLabel}</td>
-              <td>{agent.pendingActionLabel}</td>
-              <td>{agent.scheduleLabel}</td>
-              <td>
-                {agent.type === "scholar" ? <ScholarDemoButton /> : null}
-              </td>
-            </tr>
-          ))}
+          {agents.map((agent) => {
+            const toggleLabel = getToggleLabel(agent);
+            const isBusy = actionControls?.busyAgentId === agent.id;
+
+            return (
+              <tr key={agent.id}>
+                <td>
+                  <strong>{agent.name}</strong>
+                  <span>{agent.source === "dev" ? "Official template" : "Community template"}</span>
+                </td>
+                <td>
+                  <span className={`table-status ${agent.status}`}>{formatStatus(agent.status)}</span>
+                </td>
+                <td>{agent.lastRunLabel}</td>
+                <td>{agent.nextRunLabel}</td>
+                <td>{agent.pendingActionLabel}</td>
+                <td>{agent.scheduleLabel}</td>
+                <td>
+                  {agent.type === "scholar" ? <ScholarDemoButton /> : null}
+                </td>
+                {actionControls ? (
+                  <td>
+                    <div className="agent-row-actions">
+                      <button
+                        className="secondary"
+                        disabled={isBusy}
+                        onClick={() => actionControls.onRunNow?.(agent.id)}
+                        type="button"
+                      >
+                        Run now
+                      </button>
+                      {toggleLabel ? (
+                        <button
+                          className="secondary"
+                          disabled={isBusy}
+                          onClick={() => actionControls.onToggleStatus?.(agent)}
+                          type="button"
+                        >
+                          {toggleLabel}
+                        </button>
+                      ) : null}
+                      <button
+                        className="secondary danger"
+                        disabled={isBusy}
+                        onClick={() => actionControls.onDelete?.(agent.id)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                ) : null}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+      {actionControls?.error ? <p className="form-message error">{actionControls.error}</p> : null}
       <div className="table-actions">
         <Link className="button-link" href="/marketplace">
           Install from marketplace
@@ -239,16 +484,54 @@ export function EventList({ events }: { events: AgentEvent[] }) {
   );
 }
 
-export function StudioQueue({ drafts }: { drafts: StudioDraft[] }) {
+export function StudioQueue({
+  drafts,
+  activeDraftId,
+  deployingDraftId,
+  onSelectDraft,
+  onDeployDraft,
+}: {
+  drafts: StudioDraft[];
+  activeDraftId?: string;
+  deployingDraftId?: string | null;
+  onSelectDraft?: (draft: StudioDraft) => void;
+  onDeployDraft?: (draft: StudioDraft) => Promise<void> | void;
+}) {
   return (
     <div className="studio-queue">
       {drafts.map((draft) => (
-        <article key={draft.id} className="queue-card">
+        <article
+          key={draft.id}
+          className={draft.id === activeDraftId ? "queue-card active" : "queue-card"}
+        >
           <div className="queue-state">{draft.state}</div>
           <div>
             <h3>{draft.title}</h3>
             <p>{draft.summary}</p>
           </div>
+          {onSelectDraft || onDeployDraft ? (
+            <div className="card-actions">
+              {onSelectDraft ? (
+                <button
+                  className="secondary"
+                  onClick={() => onSelectDraft(draft)}
+                  type="button"
+                >
+                  Open draft
+                </button>
+              ) : null}
+              {onDeployDraft && draft.draftPayload && !draft.agentId ? (
+                <button
+                  disabled={deployingDraftId === draft.id}
+                  onClick={() => onDeployDraft(draft)}
+                  type="button"
+                >
+                  {deployingDraftId === draft.id ? "Deploying..." : "Deploy privately"}
+                </button>
+              ) : null}
+              {draft.agentId ? <span className="status-chip student">Deployed</span> : null}
+            </div>
+          ) : null}
         </article>
       ))}
     </div>

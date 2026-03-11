@@ -1,11 +1,42 @@
 import type {
   Agent,
   AgentEvent,
+  ConfigEnvelope,
   FilterOption,
   MarketplaceTemplate,
   SettingsSection,
   StudioDraft,
 } from "./types";
+
+function createMockTemplateConfig(
+  cadenceLabel: string,
+  outcomes: string[],
+  setupFields: string[]
+): ConfigEnvelope {
+  return {
+    schemaVersion: "1.0.0",
+    inputSchema: {
+      fields: setupFields.map((field, index) => ({
+        key: `field_${index + 1}`,
+        label: field,
+        type: "text",
+      })),
+    },
+    defaultConfig: {
+      cadenceLabel,
+      outcomes,
+    },
+    currentConfig: {
+      cadenceLabel,
+      outcomes,
+    },
+    defaultSchedule: {
+      enabled: true,
+      cron: "0 9 * * *",
+      timezone: "America/Chicago",
+    },
+  };
+}
 
 export const marketplaceCategories: FilterOption[] = [
   { label: "All categories", value: "all" },
@@ -30,6 +61,11 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
     scheduleDefault: "Every 10 minutes with retry jitter",
     setupFields: ["EID login", "Course unique numbers", "Preferred semester", "Conflict policy"],
     outcomes: ["Seat monitoring", "Conflict confirmation", "Duo retry handling"],
+    templateConfig: createMockTemplateConfig(
+      "Every 10 minutes with retry jitter",
+      ["Seat monitoring", "Conflict confirmation", "Duo retry handling"],
+      ["EID login", "Course unique numbers", "Preferred semester", "Conflict policy"]
+    ),
   },
   {
     id: "scholarbot",
@@ -45,6 +81,11 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
     scheduleDefault: "Nightly scan with deadline escalation",
     setupFields: ["Student profile", "Scholarship sources", "Resume and essay notes", "Notification method"],
     outcomes: ["Opportunity matching", "Application checkpointing", "Missing-field handoff"],
+    templateConfig: createMockTemplateConfig(
+      "Nightly scan with deadline escalation",
+      ["Opportunity matching", "Application checkpointing", "Missing-field handoff"],
+      ["Student profile", "Scholarship sources", "Resume and essay notes", "Notification method"]
+    ),
   },
   {
     id: "financial-aid-audit",
@@ -60,6 +101,11 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
     scheduleDefault: "Daily check-in every weekday",
     setupFields: ["Portal credentials", "Aid checklist targets", "Escalation preference"],
     outcomes: ["Document reminders", "Status snapshots", "Missing-item summary"],
+    templateConfig: createMockTemplateConfig(
+      "Daily check-in every weekday",
+      ["Document reminders", "Status snapshots", "Missing-item summary"],
+      ["Portal credentials", "Aid checklist targets", "Escalation preference"]
+    ),
   },
   {
     id: "lab-openings",
@@ -75,6 +121,11 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
     scheduleDefault: "Three scans per week",
     setupFields: ["Research interests", "Department targets", "Faculty list"],
     outcomes: ["Lab opening detection", "Match digest", "Saved faculty notes"],
+    templateConfig: createMockTemplateConfig(
+      "Three scans per week",
+      ["Lab opening detection", "Match digest", "Saved faculty notes"],
+      ["Research interests", "Department targets", "Faculty list"]
+    ),
   },
   {
     id: "travel-fund",
@@ -90,6 +141,11 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
     scheduleDefault: "Weekly scan",
     setupFields: ["College", "Degree program", "Conference timeline"],
     outcomes: ["Deadline monitoring", "Requirement comparison", "Reminder queue"],
+    templateConfig: createMockTemplateConfig(
+      "Weekly scan",
+      ["Deadline monitoring", "Requirement comparison", "Reminder queue"],
+      ["College", "Degree program", "Conference timeline"]
+    ),
   },
 ];
 
@@ -177,12 +233,14 @@ export const studioDrafts: StudioDraft[] = [
     title: "Department deadline tracker",
     state: "Spec ready",
     summary: "Scans department pages, pulls upcoming application windows, and posts reminders to email.",
+    prompt: "Track department deadlines and send reminders.",
   },
   {
     id: "draft-2",
     title: "Advising appointment opener",
     state: "Dry run blocked",
     summary: "Detected a login step that needs a clearer session handoff before deployment.",
+    prompt: "Monitor advising appointment openings and notify me when a slot appears.",
   },
 ];
 
