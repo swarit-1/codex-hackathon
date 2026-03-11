@@ -11,6 +11,7 @@ const navItems: NavItem[] = [
   { href: "/", label: "Home", description: "Overview and launch points" },
   { href: "/marketplace", label: "Marketplace", description: "Browse and compare workflows" },
   { href: "/my-agents", label: "My Agents", description: "Operate installed automations" },
+  { href: "/eureka", label: "EurekaBot", description: "Find lab openings and draft emails" },
   { href: "/studio", label: "Studio", description: "Draft and publish new workflows" },
   { href: "/settings", label: "Settings", description: "Manage profile and credentials" },
 ];

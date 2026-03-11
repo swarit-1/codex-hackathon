@@ -90,12 +90,18 @@ test("regbot_happy_path captures Duo retry and successful registration", async (
   resetAll();
 
   const install = await installTemplate(REGBOT_TEMPLATE_ID, {
-    courseNumber: "CS 331",
-    uniqueId: "77880",
     semester: "Fall 2026",
-    seatAvailableOnAttempt: 1,
     duoTimeoutAttempts: 1,
     maxPollAttempts: 2,
+    watchList: [
+      {
+        courseNumber: "CS 331",
+        uniqueId: "77880",
+        semester: "Fall 2026",
+        autoRegister: true,
+        seatAvailableOnAttempt: 1,
+      },
+    ],
   });
 
   const agent = getAgentById(install.agentId);
@@ -110,6 +116,53 @@ test("regbot_happy_path captures Duo retry and successful registration", async (
   assert.ok(events.includes("retry"), "regbot logs should include retry for Duo timeout");
   assert.ok(events.includes("success"), "regbot logs should include success terminal event");
   assert.ok(logs.every((log) => Boolean(log.scenarioId)), "all regbot logs should include scenarioId");
+});
+
+test("regbot watches multiple registration numbers and auto-registers the first section that opens", async () => {
+  resetAll();
+
+  const install = await installTemplate(REGBOT_TEMPLATE_ID, {
+    semester: "Fall 2026",
+    maxPollAttempts: 3,
+    watchList: [
+      {
+        courseNumber: "CS 429",
+        uniqueId: "51230",
+        semester: "Fall 2026",
+        autoRegister: true,
+        seatAvailableOnAttempt: 3,
+      },
+      {
+        courseNumber: "CS 331",
+        uniqueId: "77880",
+        semester: "Fall 2026",
+        autoRegister: true,
+        seatAvailableOnAttempt: 2,
+      },
+    ],
+  });
+
+  const agent = getAgentById(install.agentId);
+  assert.equal(agent?.status, "completed");
+
+  const monitors = listRegistrationMonitors(DEFAULT_USER_ID).filter((monitor) => monitor.agentId === install.agentId);
+  assert.equal(monitors.length, 2, "one monitor should be created per watched registration number");
+  assert.equal(
+    monitors.find((monitor) => monitor.uniqueId === "77880")?.status,
+    "registered",
+    "first available watched section should be auto-registered",
+  );
+  assert.equal(
+    monitors.find((monitor) => monitor.uniqueId === "51230")?.status,
+    "watching",
+    "later-opening sections should remain under watch once registration succeeds",
+  );
+
+  const logs = listByScenario(REGBOT_HAPPY_PATH_SCENARIO);
+  assert.ok(
+    logs.some((log) => log.details.uniqueId === "77880" && log.event === "success"),
+    "success log should include the registration number that was claimed",
+  );
 });
 
 test("install rejects unsupported student template source in phase 1", async () => {

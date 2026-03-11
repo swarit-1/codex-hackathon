@@ -13,8 +13,10 @@ import {
 import { normalizeRuntimeEvent, runtimeEventFromContext, type RawWebhookPayload } from "./shared/eventTypes.ts";
 import { runScholarBot, resumeScholarBot } from "./scholarbot/runner.ts";
 import { runRegBot } from "./regbot/runner.ts";
+import { runEurekaBot, resumeEurekaBot } from "./eurekabot/runner.ts";
 
 const DEFAULT_SCHOLAR_SEARCH_URL = "https://utexas.scholarships.ngwebsolutions.com/ScholarX_StudentLanding.aspx";
+const DEFAULT_EUREKA_URL = "https://eureka-prod.herokuapp.com/opportunities";
 
 export async function triggerAgentRun(agentId: string, runType: RunType): Promise<Record<string, unknown>> {
   const agent = getAgentById(agentId);
@@ -75,6 +77,8 @@ export async function triggerAgentRun(agentId: string, runType: RunType): Promis
     outcome = runScholarBot(agent, context);
   } else if (agent.type === "reg") {
     outcome = runRegBot(agent, context);
+  } else if (agent.type === "eureka") {
+    outcome = runEurekaBot(agent, context);
   } else {
     appendLog({
       agentId: agent.id,
@@ -193,7 +197,7 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
 
   const context = buildRunContext(agent, "resume");
 
-  if (agent.type !== "scholar") {
+  if (agent.type !== "scholar" && agent.type !== "eureka") {
     appendLog({
       agentId: agent.id,
       event: "failure",
@@ -201,11 +205,11 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
       details: {
         runId: context.runId,
         actionId,
-        message: "Pending action resume currently supported only for ScholarBot",
+        message: "Pending action resume currently supported only for ScholarBot and EurekaBot",
       },
     });
 
-    throw new Error("Pending action resume currently supported only for ScholarBot");
+    throw new Error("Pending action resume currently supported only for ScholarBot and EurekaBot");
   }
 
   const resumeEvent = runtimeEventFromContext(context, "resume", {
@@ -220,7 +224,9 @@ export async function resumeFromPendingAction(actionId: string): Promise<Record<
     timestamp: resumeEvent.timestamp,
   });
 
-  const outcome = resumeScholarBot(agent, context, actionId);
+  const outcome = agent.type === "eureka"
+    ? resumeEurekaBot(agent, context, actionId)
+    : resumeScholarBot(agent, context, actionId);
 
   updateAgentById(agent.id, {
     currentRunId: context.runId,
@@ -396,11 +402,91 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
   }
 
   if (agent.type === "reg") {
+    const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+    const semester = typeof configObj.semester === "string" ? configObj.semester : "Fall 2026";
+    const watchList = Array.isArray(configObj.watchList) ? configObj.watchList : [];
+    const watchedSections = watchList
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return undefined;
+        const record = entry as Record<string, unknown>;
+        const courseNumber = typeof record.courseNumber === "string" ? record.courseNumber : "Unknown Course";
+        const uniqueId = typeof record.uniqueId === "string" ? record.uniqueId : undefined;
+        if (!uniqueId) return undefined;
+        return `${courseNumber} (${uniqueId})`;
+      })
+      .filter((value): value is string => Boolean(value));
+    const singleTarget =
+      watchedSections.length === 0
+        ? `${typeof configObj.courseNumber === "string" ? configObj.courseNumber : "CS 378"} (${typeof configObj.uniqueId === "string" ? configObj.uniqueId : "12345"})`
+        : undefined;
+    const targetSummary = watchedSections.length > 0 ? watchedSections.join(", ") : singleTarget;
     return [
       "Open the UT registration portal in the local browser context.",
-      "Check the configured course section seat availability and keep the session ready for registration.",
+      `Watch the configured registration numbers for ${semester}: ${targetSummary}.`,
+      "When one of the watched sections opens, immediately continue through the registration flow for that exact registration number.",
+      "If a conflict, hold, or authentication step blocks the registration, report the blocker with the affected registration number.",
       "If authentication is required, pause and report the required user action.",
-    ].join(" ");
+    ]
+      .filter((line) => Boolean(line))
+      .join(" ");
+  }
+
+  if (agent.type === "eureka") {
+    const eurekaUrl = resolveEurekaUrl(agent);
+    const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+    const profile = (configObj.profile as Record<string, unknown> | undefined) ?? {};
+    const major = typeof profile.major === "string" ? profile.major : "Computer Science";
+    const classification = typeof profile.classification === "string" ? profile.classification : "Undergraduate";
+    const researchInterests = Array.isArray(profile.researchInterests)
+      ? (profile.researchInterests as string[]).join(", ")
+      : "machine learning, systems";
+
+    if (runType === "resume") {
+      return [
+        `Navigate to ${eurekaUrl}.`,
+        "Continue reviewing the lab opening listings in the current browser context.",
+        "If a login page blocks progress, stop and report the blocker.",
+        "Do NOT submit any applications or send any emails.",
+      ].join(" ");
+    }
+
+    return [
+      `You are a browser automation agent helping a UT Austin student find research lab openings.`,
+      ``,
+      `GOAL: Navigate to the UT Eureka research opportunities page and scan for open lab positions matching the student's profile.`,
+      ``,
+      `Student Profile:`,
+      `  - Major: ${major}`,
+      `  - Classification: ${classification}`,
+      `  - Research Interests: ${researchInterests}`,
+      ``,
+      `Step-by-step instructions:`,
+      `1. Navigate to ${eurekaUrl} if not already there. Wait for the page to fully load.`,
+      `2. Look for search/filter options on the page. If available:`,
+      `   - Filter by department or field related to "${major}".`,
+      `   - Filter by keywords related to "${researchInterests}".`,
+      `   - Filter for "${classification}" level positions if the option exists.`,
+      `3. Browse through the listed research opportunities and lab openings.`,
+      `4. For each relevant posting, extract:`,
+      `   - Lab/project name`,
+      `   - Professor/PI name and email`,
+      `   - Department`,
+      `   - Research area/description`,
+      `   - Requirements or qualifications`,
+      `   - Application deadline (if listed)`,
+      `   - Posted date`,
+      `5. Collect information for up to 10 relevant openings.`,
+      `6. Report back all extracted lab openings with their details.`,
+      ``,
+      `CRITICAL RULES:`,
+      `- DO NOT submit any applications or send any emails.`,
+      `- DO NOT click on any Apply or Contact buttons.`,
+      `- If you encounter a login page, stop and report that authentication is required.`,
+      `- Focus on positions that match the student's major and research interests.`,
+      `- Take your time to thoroughly scan all available listings.`,
+    ]
+      .filter((line) => line !== "")
+      .join("\n");
   }
 
   return process.env.BROWSER_USE_DEFAULT_TASK_PROMPT ?? "Open the target workflow page and report ready state.";
@@ -409,6 +495,9 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
 function buildBrowserUseStartUrl(agent: AgentRecord): string | undefined {
   if (agent.type === "scholar") {
     return resolveScholarSearchUrl(agent);
+  }
+  if (agent.type === "eureka") {
+    return resolveEurekaUrl(agent);
   }
   return undefined;
 }
@@ -426,4 +515,19 @@ function resolveScholarSearchUrl(agent: AgentRecord): string {
   }
 
   return DEFAULT_SCHOLAR_SEARCH_URL;
+}
+
+function resolveEurekaUrl(agent: AgentRecord): string {
+  const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+  const fromConfig = configObj.eurekaUrl;
+  if (typeof fromConfig === "string" && fromConfig.trim().length > 0) {
+    return fromConfig.trim();
+  }
+
+  const fromEnv = process.env.BROWSER_USE_EUREKA_URL;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
+  }
+
+  return DEFAULT_EUREKA_URL;
 }
