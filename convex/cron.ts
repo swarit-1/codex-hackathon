@@ -1,6 +1,7 @@
 import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { patchDoc, queryByIndex } from "./lib/db";
+import { createAgentRun } from "./lib/agentRuns";
 import { appendAgentLog } from "./lib/logging";
 import { toAgentRecord } from "./lib/records";
 import { getNextCronTime } from "./lib/cronParser";
@@ -41,6 +42,14 @@ export const checkScheduledAgents = internalMutation({
         now,
         agent.schedule.timezone
       );
+      const run = await createAgentRun(ctx, {
+        userId: agent.userId,
+        agentId: agent.id,
+        triggerType: "scheduled",
+        status: "queued",
+        phase: "queued",
+        summary: "Scheduled run queued for launch.",
+      });
 
       await patchDoc(ctx, agent.id, {
         lastRunStatus: "running",
@@ -51,7 +60,9 @@ export const checkScheduledAgents = internalMutation({
 
       await appendAgentLog(ctx, {
         agentId: agent.id,
+        runId: run.id,
         event: "agent.scheduler.triggered",
+        phase: "queued",
         details: {
           runType: "scheduled",
           triggeredAt: now,
@@ -62,6 +73,7 @@ export const checkScheduledAgents = internalMutation({
       // Launch the actual Browser Use task
       await ctx.scheduler.runAfter(0, internal.runtime.launchBrowserTask, {
         agentId: agent.id,
+        runId: run.id,
         agentType: agent.type,
         config: agent.config,
       });

@@ -17,12 +17,57 @@ import { useCurrentUser } from "./use-demo-user";
 
 let didRequestCatalogBootstrap = false;
 
-function useCatalogBootstrap(devTemplateCount?: number) {
+function hasField(
+  template: { templateConfig?: { inputSchema?: { fields?: Array<{ key?: string }> } } } | undefined,
+  key: string
+): boolean {
+  return Boolean(template?.templateConfig?.inputSchema?.fields?.some((field) => field?.key === key));
+}
+
+function shouldBootstrapCatalog(
+  devTemplates?: Array<{
+    title: string;
+    templateConfig?: { inputSchema?: { fields?: Array<{ key?: string }> } };
+  }>,
+  studentTemplates?: Array<{
+    title: string;
+    templateType: string;
+  }>
+): boolean {
+  if (!devTemplates || !studentTemplates) {
+    return false;
+  }
+
+  if (devTemplates.length === 0) {
+    return true;
+  }
+
+  const regBot = devTemplates.find((template) => template.title === "RegBot");
+  const labOpeningsWatch = studentTemplates.find((template) => template.title === "Lab Openings Watch");
+
+  return !hasField(regBot, "courseNumber") || labOpeningsWatch?.templateType !== "eureka";
+}
+
+function useCatalogBootstrap(
+  devTemplates?: Array<{
+    title: string;
+    templateType: string;
+    templateConfig?: { inputSchema?: { fields?: Array<{ key?: string }> } };
+  }>,
+  studentTemplates?: Array<{
+    title: string;
+    templateType: string;
+  }>
+) {
   const convexEnabled = useConvexEnabled();
   const bootstrapCatalog = useMutation(api.demo.bootstrapCatalog);
 
   useEffect(() => {
-    if (!convexEnabled || devTemplateCount === undefined || devTemplateCount > 0 || didRequestCatalogBootstrap) {
+    if (
+      !convexEnabled ||
+      !shouldBootstrapCatalog(devTemplates, studentTemplates) ||
+      didRequestCatalogBootstrap
+    ) {
       return;
     }
 
@@ -30,7 +75,7 @@ function useCatalogBootstrap(devTemplateCount?: number) {
     void bootstrapCatalog({}).catch(() => {
       didRequestCatalogBootstrap = false;
     });
-  }, [bootstrapCatalog, convexEnabled, devTemplateCount]);
+  }, [bootstrapCatalog, convexEnabled, devTemplates, studentTemplates]);
 }
 
 export function useMarketplaceTemplates(source?: TemplateSource): {
@@ -57,7 +102,7 @@ export function useMarketplaceTemplates(source?: TemplateSource): {
       : "skip"
   );
 
-  useCatalogBootstrap(devResult?.items.length);
+  useCatalogBootstrap(devResult?.items, studentResult?.items);
 
   const templates = useMemo(() => {
     if (!convexEnabled) {

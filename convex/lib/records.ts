@@ -1,7 +1,9 @@
 import type {
   AgentLogRecord,
+  AgentRunRecord,
   AgentRecord,
   CustomWorkflowRecord,
+  LabOpeningRecord,
   MarketplaceTemplateRecord,
   PendingActionRecord,
   RegistrationMonitorRecord,
@@ -39,10 +41,20 @@ export function toAgentRecord(doc: ConvexDoc<Omit<AgentRecord, "id">>): AgentRec
   return toRecord(doc) as AgentRecord;
 }
 
+export function toAgentRunRecord(doc: ConvexDoc<Omit<AgentRunRecord, "id">>): AgentRunRecord {
+  return toRecord(doc) as AgentRunRecord;
+}
+
 export function toScholarshipRecord(
   doc: ConvexDoc<Omit<ScholarshipRecord, "id">>
 ): ScholarshipRecord {
   return toRecord(doc) as ScholarshipRecord;
+}
+
+export function toLabOpeningRecord(
+  doc: ConvexDoc<Omit<LabOpeningRecord, "id">>
+): LabOpeningRecord {
+  return toRecord(doc) as LabOpeningRecord;
 }
 
 export function toRegistrationMonitorRecord(

@@ -3,7 +3,12 @@ export {
   useMarketplaceCategories,
   useMarketplaceInstall,
 } from "./use-marketplace";
-export { useInstalledAgents, useAgentEvents, useAgentActions } from "./use-agents";
+export {
+  useInstalledAgents,
+  useAgentDetails,
+  useAgentEvents,
+  useAgentActions,
+} from "./use-agents";
 export { useStudioDrafts, useStudioActions } from "./use-studio";
 export {
   useAuthActions,

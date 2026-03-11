@@ -12,6 +12,17 @@ import type {
   TemplateSubmissionRecord,
 } from "./types/contracts.ts";
 
+export interface DuoSessionStoreRecord {
+  id: string;
+  userId: string;
+  authenticatedAt: number;
+  validUntil: number;
+  sessionDurationMs: number;
+  profileDirectory: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 interface RuntimeStore {
   agents: Map<string, AgentRecord>;
   marketplaceTemplates: Map<string, MarketplaceTemplateRecord>;
@@ -23,6 +34,7 @@ interface RuntimeStore {
   pendingActions: Map<string, PendingActionRecord>;
   agentLogs: Map<string, AgentLogRecord>;
   scheduledTasks: Map<string, ScheduledTaskRecord>;
+  duoSessions: Map<string, DuoSessionStoreRecord>;
   idCounters: Map<string, number>;
 }
 
@@ -44,6 +56,7 @@ const store: RuntimeStore = {
   pendingActions: new Map(),
   agentLogs: new Map(),
   scheduledTasks: new Map(),
+  duoSessions: new Map(),
   idCounters: new Map(),
 };
 
@@ -51,12 +64,16 @@ function nowTimestamp(): number {
   return Date.now();
 }
 
+function cloneJsonObject<T extends JsonObject>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 function createTemplateConfig(defaultConfig: JsonObject): MarketplaceTemplateRecord["templateConfig"] {
   return {
     schemaVersion: "1.0.0",
     inputSchema: {},
-    defaultConfig,
-    currentConfig: defaultConfig,
+    defaultConfig: cloneJsonObject(defaultConfig),
+    currentConfig: cloneJsonObject(defaultConfig),
   };
 }
 
@@ -179,6 +196,7 @@ export function resetRuntimeStore(): void {
   store.pendingActions.clear();
   store.agentLogs.clear();
   store.scheduledTasks.clear();
+  store.duoSessions.clear();
   store.idCounters.clear();
   seedTemplates();
 }

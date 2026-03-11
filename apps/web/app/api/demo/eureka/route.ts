@@ -56,19 +56,32 @@ export async function POST() {
   }
 
   try {
-    const { BrowserUse } = await import("browser-use-sdk/v3");
-    const client = new BrowserUse({ apiKey });
-
-    const session = await client.sessions.create({
-      task: TASK_PROMPT,
-      model: "bu-max",
-      keepAlive: true,
+    const response = await fetch("https://api.browser-use.com/api/v2/tasks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Browser-Use-API-Key": apiKey,
+      },
+      body: JSON.stringify({
+        task: TASK_PROMPT,
+      }),
     });
 
-    const sessionId = session.id;
+    if (!response.ok) {
+      const errorText = await response.text();
+      return NextResponse.json(
+        { ok: false, message: `Browser Use API error: ${errorText}` },
+        { status: 500 },
+      );
+    }
+
+    const data = await response.json();
+    const sessionId = data.id ?? data.task_id ?? "";
     const liveUrl =
-      session.liveUrl ??
-      `https://cloud.browser-use.com/sessions/${sessionId}`;
+      data.liveUrl ??
+      data.live_url ??
+      data.publicShareUrl ??
+      `https://cloud.browser-use.com/tasks/${sessionId}`;
 
     return NextResponse.json({
       ok: true,

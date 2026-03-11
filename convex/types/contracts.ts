@@ -4,13 +4,38 @@ export type LabOpeningStatus = "discovered" | "reviewing" | "drafting_email" | "
 export type MonitorStatus = "watching" | "registered" | "failed";
 export type IntramuralSignupStatus = "searching" | "found" | "pending_confirm" | "registered" | "failed";
 export type IntramuralRole = "captain" | "free_agent";
-export type PendingActionType = "essay" | "detail" | "confirmation" | "email_draft";
+export type PendingActionType = "essay" | "detail" | "confirmation" | "email_draft" | "duo_reauth";
 export type TemplateSource = "dev" | "student";
 export type SubmissionStatus = "draft" | "pending_review" | "approved" | "rejected";
 export type TemplateVisibility = "private" | "public";
 export type AgentOwnerType = "first_party" | "student" | "generated";
 export type AgentType = "scholar" | "reg" | "eureka" | "im" | "custom";
 export type AgentRunStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
+export type AgentRunTrackingStatus =
+  | "queued"
+  | "launching"
+  | "running"
+  | "waiting_for_input"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+export type AgentRunPhase =
+  | "queued"
+  | "starting_browser"
+  | "navigating"
+  | "authenticating"
+  | "scanning"
+  | "extracting"
+  | "writing_results"
+  | "completed"
+  | "failed";
+export type AgentRunErrorCategory =
+  | "configuration"
+  | "authentication"
+  | "site_changed"
+  | "provider_error"
+  | "timeout"
+  | "unknown";
 export type AuthMethod = "email" | "ut_sso" | "demo";
 export type LogLevel = "info" | "warning" | "error";
 export type ReviewDecision = "approved" | "rejected";
@@ -311,6 +336,24 @@ export interface AgentRecord {
   updatedAt: number;
 }
 
+export interface AgentRunRecord {
+  id: string;
+  userId: string;
+  agentId: string;
+  triggerType: RuntimeRunType;
+  status: AgentRunTrackingStatus;
+  phase: AgentRunPhase;
+  startedAt: number;
+  updatedAt: number;
+  endedAt?: number;
+  browserUseTaskId?: string;
+  liveUrl?: string;
+  summary?: string;
+  resultCounts?: JsonObject;
+  error?: string;
+  errorCategory?: AgentRunErrorCategory;
+}
+
 export interface ScholarshipRecord {
   id: string;
   userId: string;
@@ -403,12 +446,14 @@ export interface CustomWorkflowRecord {
 export interface AgentLogRecord {
   id: string;
   agentId: string;
+  runId?: string;
   timestamp: number;
   event: string;
   level: LogLevel;
   details: JsonValue;
   screenshots?: string[];
   scenarioId?: ScenarioId;
+  phase?: AgentRunPhase;
 }
 
 // Dev3 legacy interface (kept for backward compatibility with runtime store)

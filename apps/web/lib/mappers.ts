@@ -1,7 +1,11 @@
 import type {
   Agent,
   AgentEvent,
+  AgentRun,
   MarketplaceTemplate,
+  PendingAction,
+  RegistrationMonitor,
+  ScholarshipMatch,
   StudioDraft,
 } from "./contracts/types";
 import type {
@@ -144,7 +148,7 @@ export function toAgentUI(
     userId: string;
     templateId?: string;
     ownerType: string;
-    type: "scholar" | "reg" | "custom";
+    type: "scholar" | "reg" | "eureka" | "custom" | "im";
     status: "active" | "paused" | "completed" | "error";
     config: { defaultConfig?: { title?: string }; currentConfig?: { title?: string; cadenceLabel?: string } };
     schedule: { enabled: boolean; cron: string };
@@ -153,7 +157,22 @@ export function toAgentUI(
     nextRunAt?: number;
   },
   templateTitle?: string,
-  pendingCount?: number
+  pendingCount?: number,
+  currentRun?: {
+    id: string;
+    triggerType: "manual" | "scheduled" | "resume";
+    status: "queued" | "launching" | "running" | "waiting_for_input" | "succeeded" | "failed" | "cancelled";
+    phase: "queued" | "starting_browser" | "navigating" | "authenticating" | "scanning" | "extracting" | "writing_results" | "completed" | "failed";
+    startedAt: number;
+    updatedAt: number;
+    endedAt?: number;
+    browserUseTaskId?: string;
+    liveUrl?: string;
+    summary?: string;
+    resultCounts?: Record<string, number>;
+    error?: string;
+    errorCategory?: "configuration" | "authentication" | "site_changed" | "provider_error" | "timeout" | "unknown";
+  }
 ): Agent {
   const name =
     templateTitle ??
@@ -164,6 +183,20 @@ export function toAgentUI(
   const source: "dev" | "student" =
     record.ownerType === "first_party" ? "dev" : "student";
 
+  const pendingActionCount = pendingCount ?? 0;
+  const mappedRun = currentRun ? toAgentRunUI(currentRun) : undefined;
+  const latestSummary =
+    mappedRun?.summary ??
+    (mappedRun?.status === "failed"
+      ? mappedRun.error ?? "The latest run failed."
+      : formatLastRun(record.lastRunStatus, record.lastRunAt));
+  const nextStepLabel =
+    mappedRun?.status === "waiting_for_input"
+      ? "Needs your input"
+      : pendingActionCount > 0
+        ? `${pendingActionCount} action${pendingActionCount === 1 ? "" : "s"} pending`
+        : "No action needed";
+
   return {
     id: record.id,
     name,
@@ -171,16 +204,57 @@ export function toAgentUI(
     source,
     type: record.type,
     status: record.status,
+    config: record.config as Agent["config"],
+    pendingActionCount,
+    currentRun: mappedRun,
+    latestSummary,
+    nextStepLabel,
     lastRunLabel: formatLastRun(record.lastRunStatus, record.lastRunAt),
     nextRunLabel: formatNextRun(record.nextRunAt, record.status),
-    pendingActionLabel:
-      pendingCount && pendingCount > 0
-        ? `${pendingCount} action${pendingCount > 1 ? "s" : ""} pending`
-        : "No pending action",
+    pendingActionLabel: pendingActionCount > 0
+      ? `${pendingActionCount} action${pendingActionCount > 1 ? "s" : ""} pending`
+      : "No pending action",
     scheduleLabel: record.schedule.enabled
       ? ((record.config.currentConfig as any)?.cadenceLabel ?? record.schedule.cron)
       : "Manual",
     lastRunStatus: record.lastRunStatus as Agent["lastRunStatus"],
+  };
+}
+
+export function toAgentRunUI(record: {
+  id: string;
+  triggerType: "manual" | "scheduled" | "resume";
+  status: "queued" | "launching" | "running" | "waiting_for_input" | "succeeded" | "failed" | "cancelled";
+  phase: "queued" | "starting_browser" | "navigating" | "authenticating" | "scanning" | "extracting" | "writing_results" | "completed" | "failed";
+  startedAt: number;
+  updatedAt: number;
+  endedAt?: number;
+  browserUseTaskId?: string;
+  liveUrl?: string;
+  summary?: string;
+  resultCounts?: Record<string, number>;
+  error?: string;
+  errorCategory?: "configuration" | "authentication" | "site_changed" | "provider_error" | "timeout" | "unknown";
+}): AgentRun {
+  return {
+    id: record.id,
+    triggerType: record.triggerType,
+    status: record.status,
+    phase: record.phase,
+    statusLabel: formatRunStatus(record.status),
+    phaseLabel: formatRunPhase(record.phase),
+    startedAt: record.startedAt,
+    updatedAt: record.updatedAt,
+    endedAt: record.endedAt,
+    updatedLabel: formatTimeAgo(record.updatedAt),
+    startedLabel: formatAbsoluteTime(record.startedAt),
+    endedLabel: record.endedAt ? formatAbsoluteTime(record.endedAt) : undefined,
+    summary: record.summary,
+    resultCounts: record.resultCounts,
+    liveUrl: record.liveUrl,
+    browserUseTaskId: record.browserUseTaskId,
+    error: record.error,
+    errorCategory: record.errorCategory,
   };
 }
 
@@ -222,6 +296,43 @@ function formatTimeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
+function formatAbsoluteTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatRunStatus(status: string): string {
+  switch (status) {
+    case "waiting_for_input":
+      return "Waiting on you";
+    case "launching":
+      return "Launching";
+    default:
+      return formatStatusText(status);
+  }
+}
+
+function formatRunPhase(phase: string): string {
+  switch (phase) {
+    case "starting_browser":
+      return "Launching browser";
+    case "writing_results":
+      return "Writing results";
+    default:
+      return formatStatusText(phase);
+  }
+}
+
+function formatStatusText(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 /**
  * Maps a backend AgentLogRecord to the frontend AgentEvent UI type.
  */
@@ -257,6 +368,64 @@ export function toAgentEvent(
     title: details?.title ?? record.event.replace(/\./g, " "),
     detail: details?.detail ?? "",
     kind: kindMap[record.level] ?? "success",
+  };
+}
+
+export function toScholarshipMatch(record: {
+  id: string;
+  title: string;
+  source: string;
+  deadline?: number;
+  matchScore?: number;
+  status: "found" | "applying" | "paused" | "submitted" | "expired";
+  missingFields?: string[];
+  updatedAt: number;
+}): ScholarshipMatch {
+  return {
+    id: record.id,
+    title: record.title,
+    source: record.source,
+    deadline: record.deadline,
+    matchScore: record.matchScore,
+    status: record.status,
+    missingFields: record.missingFields,
+    updatedAt: record.updatedAt,
+  };
+}
+
+export function toRegistrationMonitor(record: {
+  id: string;
+  courseNumber: string;
+  uniqueId: string;
+  semester: string;
+  status: "watching" | "registered" | "failed";
+  pollInterval: number;
+  updatedAt?: number;
+}): RegistrationMonitor {
+  return {
+    id: record.id,
+    courseNumber: record.courseNumber,
+    uniqueId: record.uniqueId,
+    semester: record.semester,
+    status: record.status,
+    pollInterval: record.pollInterval,
+    updatedAt: record.updatedAt,
+  };
+}
+
+export function toPendingAction(record: {
+  id: string;
+  type: "essay" | "detail" | "confirmation" | "email_draft";
+  prompt: string;
+  createdAt: number;
+  resolvedAt?: number;
+}): PendingAction {
+  return {
+    id: record.id,
+    type: record.type,
+    prompt: record.prompt,
+    createdAt: record.createdAt,
+    resolvedAt: record.resolvedAt,
   };
 }
 

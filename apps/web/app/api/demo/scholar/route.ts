@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 const SCHOLAR_SEARCH_URL =
   "https://utexas.scholarships.ngwebsolutions.com/Scholarships/Search";
 
-const TASK_PROMPT = `You are a browser automation agent helping a UT Austin student apply to a scholarship.
+const TASK_PROMPT = `You are a browser automation agent helping a UT Austin student review a scholarship application flow.
 
 GOAL: Navigate to the scholarship search page, find the "CREEES McWilliams Scholarship",
-click its "Apply Now" button, and then fill out the entire scholarship application
-form across all pages — but DO NOT submit at the end.
+click its "Apply Now" button, and review the application flow as far as authorized access allows.
+Do NOT submit any final application.
 
 Step-by-step instructions:
 
@@ -26,26 +26,30 @@ Step-by-step instructions:
      or approve via the Duo app — wait for it to complete).
    - After login, you should be redirected back to the scholarship application.
 
-4. Once on the scholarship application form, fill out ALL available fields on
-   each page. Use reasonable values for a UT Austin undergraduate Computer Science student.
+4. If you reach the scholarship application form, fill out the visible fields with
+   reasonable placeholder values for a UT Austin undergraduate Computer Science student.
    For text fields that ask for essays or explanations, write 2-3 thoughtful sentences.
 
-5. After completing all fields on a page, click "Next", "Continue", or the next
+5. After completing all visible fields on a page, click "Next", "Continue", or the next
    step/page button to proceed.
 
-6. Continue filling out ALL pages of the application.
+6. Continue until you either reach the final review/submit page or hit an authentication wall.
 
 7. On the FINAL page/step, STOP. Do NOT click "Submit", "Finish", or any button
-   that would finalize/submit the application.
+   that would finalize or submit the application.
 
-8. Report back what fields you found on each page and what values you entered.
+8. Report back:
+   - what pages or steps you reached,
+   - what fields you found,
+   - what values you entered,
+   - and whether authentication was required.
 
 CRITICAL RULES:
 - DO NOT click any Submit or Finish button that would finalize the application.
-- Fill out EVERY field on EVERY page before moving to the next page.
+- DO NOT guess or invent login credentials.
 - If a dropdown does not have an exact match, pick the closest available option.
-- For file upload fields, upload a small dummy text file if possible, otherwise skip.
-- Take your time and be thorough — fill ALL fields before proceeding.`;
+- If a file upload field appears, skip the upload and report it instead.
+- Take your time and be thorough, but stop immediately at any unauthorized boundary.`;
 
 export async function POST() {
   const apiKey = process.env.BROWSER_USE_API_KEY;
@@ -83,7 +87,9 @@ export async function POST() {
     const data = await response.json();
     const sessionId = data.id ?? data.task_id ?? "";
     const liveUrl =
+      data.liveUrl ??
       data.live_url ??
+      data.publicShareUrl ??
       `https://cloud.browser-use.com/tasks/${sessionId}`;
 
     return NextResponse.json({

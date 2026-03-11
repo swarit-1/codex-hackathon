@@ -9,6 +9,7 @@
  */
 
 import type * as agentLogs from "../agentLogs.js";
+import type * as agentRuns from "../agentRuns.js";
 import type * as agents from "../agents.js";
 import type * as auth from "../auth.js";
 import type * as cron from "../cron.js";
@@ -17,6 +18,9 @@ import type * as customWorkflows from "../customWorkflows.js";
 import type * as dashboard from "../dashboard.js";
 import type * as demo from "../demo.js";
 import type * as flowforge from "../flowforge.js";
+import type * as labOpenings from "../labOpenings.js";
+import type * as lib_agentConfig from "../lib/agentConfig.js";
+import type * as lib_agentRuns from "../lib/agentRuns.js";
 import type * as lib_agentUtils from "../lib/agentUtils.js";
 import type * as lib_cronParser from "../lib/cronParser.js";
 import type * as lib_db from "../lib/db.js";
@@ -52,6 +56,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agentLogs: typeof agentLogs;
+  agentRuns: typeof agentRuns;
   agents: typeof agents;
   auth: typeof auth;
   cron: typeof cron;
@@ -60,6 +65,9 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   demo: typeof demo;
   flowforge: typeof flowforge;
+  labOpenings: typeof labOpenings;
+  "lib/agentConfig": typeof lib_agentConfig;
+  "lib/agentRuns": typeof lib_agentRuns;
   "lib/agentUtils": typeof lib_agentUtils;
   "lib/cronParser": typeof lib_cronParser;
   "lib/db": typeof lib_db;
