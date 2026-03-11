@@ -1,6 +1,7 @@
 declare const process: { env: Record<string, string | undefined> };
 
 import { appendLog, getAgentById, updateAgentById, getPendingActionById } from "./shared/runtimeAdapters.ts";
+import { getRuntimeStore, nextId, DEFAULT_USER_ID } from "../../convex/runtimeStore.ts";
 import type { AgentRecord, AgentRunState, AgentStatus, RunType } from "../../convex/types/contracts.ts";
 import { getBrowserUseClient } from "./browserUseClient.ts";
 import {
@@ -13,6 +14,7 @@ import {
 import { normalizeRuntimeEvent, runtimeEventFromContext, type RawWebhookPayload } from "./shared/eventTypes.ts";
 import { runScholarBot, resumeScholarBot } from "./scholarbot/runner.ts";
 import { runRegBot } from "./regbot/runner.ts";
+import { runCustomAgent } from "./custom/runner.ts";
 
 const DEFAULT_SCHOLAR_SEARCH_URL = "https://utexas.scholarships.ngwebsolutions.com/ScholarX_StudentLanding.aspx";
 
@@ -75,6 +77,8 @@ export async function triggerAgentRun(agentId: string, runType: RunType): Promis
     outcome = runScholarBot(agent, context);
   } else if (agent.type === "reg") {
     outcome = runRegBot(agent, context);
+  } else if (agent.type === "custom") {
+    outcome = runCustomAgent(agent, context);
   } else {
     appendLog({
       agentId: agent.id,
@@ -403,12 +407,48 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
     ].join(" ");
   }
 
+  if (agent.type === "custom") {
+    const customConfig = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+    const instructions = typeof customConfig.instructions === "string" ? customConfig.instructions.trim() : "";
+    const targetUrl = typeof customConfig.targetUrl === "string" ? customConfig.targetUrl.trim() : "";
+
+    if (!instructions) {
+      return process.env.BROWSER_USE_DEFAULT_TASK_PROMPT ?? "Open the target workflow page and report ready state.";
+    }
+
+    return [
+      `You are a browser automation agent executing a user-defined workflow.`,
+      ``,
+      `TASK: ${instructions}`,
+      ``,
+      targetUrl ? `TARGET URL: ${targetUrl}` : "",
+      ``,
+      `Step-by-step instructions:`,
+      targetUrl ? `1. Navigate to ${targetUrl} and wait for the page to fully load.` : `1. Open the target page as described in the task.`,
+      `2. Follow the task description above carefully, performing each action in sequence.`,
+      `3. If you encounter a login or authentication page, stop and report that authentication is required.`,
+      `4. After completing the task, report what actions you took and what results you observed.`,
+      ``,
+      `CRITICAL RULES:`,
+      `- Follow the task description faithfully.`,
+      `- If you encounter an error or unexpected state, stop and report the issue.`,
+      `- Do NOT submit any final forms or make irreversible changes without explicit instruction.`,
+    ]
+      .filter((line) => line !== "")
+      .join("\n");
+  }
+
   return process.env.BROWSER_USE_DEFAULT_TASK_PROMPT ?? "Open the target workflow page and report ready state.";
 }
 
 function buildBrowserUseStartUrl(agent: AgentRecord): string | undefined {
   if (agent.type === "scholar") {
     return resolveScholarSearchUrl(agent);
+  }
+  if (agent.type === "custom") {
+    const customConfig = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+    const targetUrl = typeof customConfig.targetUrl === "string" ? customConfig.targetUrl.trim() : "";
+    return targetUrl.length > 0 ? targetUrl : undefined;
   }
   return undefined;
 }
@@ -426,4 +466,49 @@ function resolveScholarSearchUrl(agent: AgentRecord): string {
   }
 
   return DEFAULT_SCHOLAR_SEARCH_URL;
+}
+
+export async function installTemplate(
+  templateId: string,
+  userConfig: Record<string, unknown>,
+): Promise<{ agentId: string; runResult?: Record<string, unknown> }> {
+  const store = getRuntimeStore();
+  const template = store.marketplaceTemplates.get(templateId);
+  if (!template) {
+    throw new Error(`Template not found: ${templateId}`);
+  }
+
+  const tpl = template as { source: string; agentType: string; templateConfig: Record<string, unknown>; title: string };
+  if (tpl.source !== "dev") {
+    throw new Error(`Phase 1 supports only dev templates, received source: ${tpl.source}`);
+  }
+  if (tpl.agentType !== "scholar" && tpl.agentType !== "reg") {
+    throw new Error(`Phase 1 supports only first-party scholar/reg templates, received: ${tpl.agentType}`);
+  }
+
+  const agentId = nextId("agent");
+  const now = Date.now();
+  const mergedConfig = { ...tpl.templateConfig, ...userConfig };
+
+  const agent: AgentRecord = {
+    id: agentId,
+    userId: DEFAULT_USER_ID,
+    templateId,
+    ownerType: "first_party",
+    type: tpl.agentType as AgentRecord["type"],
+    status: "active",
+    config: {
+      schemaVersion: "1.0",
+      inputSchema: {},
+      defaultConfig: mergedConfig as import("../../convex/types/contracts.ts").JsonObject,
+    },
+    schedule: { enabled: false, cron: "", timezone: "America/Chicago" },
+    lastRunStatus: "idle",
+    createdAt: now,
+    updatedAt: now,
+  };
+  store.agents.set(agentId, agent);
+
+  const runResult = await triggerAgentRun(agentId, "install");
+  return { agentId, runResult };
 }

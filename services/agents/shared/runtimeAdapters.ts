@@ -148,6 +148,26 @@ export function updateMonitorStatus(id: string, status: RegistrationMonitorRecor
   monitor.updatedAt = Date.now();
 }
 
+// ── Pending Actions (queries) ────────────────────────────────────────────────
+
+export function listPendingActionsByAgent(agentId: string): PendingActionRecord[] {
+  const results: PendingActionRecord[] = [];
+  for (const pa of getRuntimeStore().pendingActions.values()) {
+    if (pa.agentId === agentId) results.push(pa);
+  }
+  return results;
+}
+
+// ── Registration Monitors (queries) ──────────────────────────────────────────
+
+export function listMonitorsByUser(userId: string): RegistrationMonitorRecord[] {
+  const results: RegistrationMonitorRecord[] = [];
+  for (const m of getRuntimeStore().registrationMonitors.values()) {
+    if (m.userId === userId) results.push(m);
+  }
+  return results;
+}
+
 // ── Agent Logs ───────────────────────────────────────────────────────────────
 
 export function appendLog(entry: {
@@ -168,4 +188,12 @@ export function appendLog(entry: {
     scenarioId: entry.scenarioId as AgentLogRecord["scenarioId"],
   };
   getRuntimeStore().agentLogs.set(id, record);
+}
+
+export function listLogsByScenario(scenarioId: string): AgentLogRecord[] {
+  const results: AgentLogRecord[] = [];
+  for (const log of getRuntimeStore().agentLogs.values()) {
+    if (log.scenarioId === scenarioId) results.push(log);
+  }
+  return results;
 }
