@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 export default function ScholarBotPage() {
-  return <main>ScholarBot Panel (Scaffold)</main>;
+  redirect("/marketplace#scholarbot");
 }
