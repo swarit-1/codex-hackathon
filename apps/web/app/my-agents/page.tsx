@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AgentDetailPanel, AgentTable, AppShell, EventList, SectionHeading } from "../../components/shared";
 import {
   useAgentActions,
@@ -8,6 +8,7 @@ import {
   useAgentEvents,
   useConvexEnabled,
   useInstalledAgents,
+  useMarketplaceTemplates,
   useRequireCurrentUser,
 } from "../../lib/hooks";
 import type { Agent } from "../../lib/contracts/types";
@@ -17,6 +18,7 @@ export default function MyAgentsPage() {
   const convexEnabled = useConvexEnabled();
   const { isReady, isLoading, needsOnboarding } = useRequireCurrentUser();
   const { agents } = useInstalledAgents();
+  const { templates } = useMarketplaceTemplates();
   const { events } = useAgentEvents();
   const { runNow, updateConfig, updateStatus, deleteAgent } = useAgentActions();
   const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(undefined);
@@ -26,7 +28,10 @@ export default function MyAgentsPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [configSuccess, setConfigSuccess] = useState<string | null>(null);
+  const [pendingBrowserAgentId, setPendingBrowserAgentId] = useState<string | null>(null);
+  const browserWindowRef = useRef<Window | null>(null);
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? agents[0];
+  const selectedTemplate = templates.find((template) => template.id === selectedAgent?.templateId);
   const details = useAgentDetails(selectedAgent?.id);
 
   useEffect(() => {
@@ -39,6 +44,26 @@ export default function MyAgentsPage() {
       setSelectedAgentId(agents[0].id);
     }
   }, [agents, selectedAgentId]);
+
+  useEffect(() => {
+    if (
+      !pendingBrowserAgentId ||
+      selectedAgent?.id !== pendingBrowserAgentId ||
+      !details.currentRun?.liveUrl
+    ) {
+      return;
+    }
+
+    if (browserWindowRef.current && !browserWindowRef.current.closed) {
+      browserWindowRef.current.location.replace(details.currentRun.liveUrl);
+      browserWindowRef.current.focus();
+    } else {
+      window.open(details.currentRun.liveUrl, "_blank", "noopener,noreferrer");
+    }
+
+    setPendingBrowserAgentId(null);
+    browserWindowRef.current = null;
+  }, [details.currentRun?.liveUrl, pendingBrowserAgentId, selectedAgent?.id]);
 
   if (convexEnabled && !isReady) {
     return (
@@ -53,15 +78,26 @@ export default function MyAgentsPage() {
   }
 
   const handleRunNow = async (agentId: string) => {
+    setSelectedAgentId(agentId);
     setBusyAgentId(agentId);
     setActionError(null);
     setActionSuccess(null);
 
+    if (typeof window !== "undefined") {
+      browserWindowRef.current = window.open("", "_blank", "noopener,noreferrer");
+      setPendingBrowserAgentId(agentId);
+    }
+
     try {
       await runNow(agentId);
-      setActionSuccess("Run started. Track its live phase and summary below.");
+      setActionSuccess("Run started. The browser session will open as soon as the live task URL is ready.");
       setTimeout(() => setActionSuccess(null), 5000);
     } catch (error) {
+      if (browserWindowRef.current && !browserWindowRef.current.closed) {
+        browserWindowRef.current.close();
+      }
+      browserWindowRef.current = null;
+      setPendingBrowserAgentId(null);
       setActionError(getErrorMessage(error, "Agent run could not be requested."));
     } finally {
       setBusyAgentId(null);
@@ -174,6 +210,7 @@ export default function MyAgentsPage() {
           activeTab={activeTab}
           agent={selectedAgent}
           details={details}
+          template={selectedTemplate}
           editControls={
             convexEnabled
               ? {

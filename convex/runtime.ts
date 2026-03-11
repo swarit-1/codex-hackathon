@@ -376,7 +376,83 @@ async function callBrowserUseAPI(
   apiKey: string,
   taskPrompt: string
 ): Promise<{ taskId: string; liveUrl: string }> {
-  const response = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
+  const session = await createBrowserUseSession(apiKey);
+  const taskResponse = await createBrowserUseTask(apiKey, taskPrompt, session.id);
+  const taskData = await taskResponse.json();
+  const taskId = taskData.id ?? taskData.task_id ?? "";
+
+  if (!taskId) {
+    throw new Error("Browser Use API returned no task id.");
+  }
+
+  return {
+    taskId,
+    liveUrl: session.liveUrl,
+  };
+}
+
+async function createBrowserUseSession(
+  apiKey: string
+): Promise<{ id: string; liveUrl: string }> {
+  const response = await fetch(`${BROWSER_USE_API_URL}/sessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Browser-Use-API-Key": apiKey,
+    },
+    body: JSON.stringify({
+      keepAlive: true,
+      persistMemory: true,
+      enableRecording: false,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Browser Use session API error (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  const sessionId = data.id ?? data.session_id ?? "";
+  const liveUrl = data.liveUrl ?? data.live_url ?? "";
+
+  if (!sessionId || typeof liveUrl !== "string" || liveUrl.length === 0) {
+    throw new Error("Browser Use session API returned no usable liveUrl.");
+  }
+
+  return {
+    id: sessionId,
+    liveUrl,
+  };
+}
+
+async function createBrowserUseTask(
+  apiKey: string,
+  taskPrompt: string,
+  sessionId: string
+): Promise<Response> {
+  const primaryResponse = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Browser-Use-API-Key": apiKey,
+    },
+    body: JSON.stringify({
+      task: taskPrompt,
+      sessionId,
+    }),
+  });
+
+  if (primaryResponse.ok) {
+    return primaryResponse;
+  }
+
+  if (primaryResponse.status !== 422) {
+    const errorText = await primaryResponse.text();
+    throw new Error(`Browser Use task API error (${primaryResponse.status}): ${errorText}`);
+  }
+
+  const fallbackResponse = await fetch(`${BROWSER_USE_API_URL}/tasks`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -387,20 +463,12 @@ async function callBrowserUseAPI(
     }),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Browser Use API error (${response.status}): ${errorText}`);
+  if (!fallbackResponse.ok) {
+    const errorText = await fallbackResponse.text();
+    throw new Error(`Browser Use task API error (${fallbackResponse.status}): ${errorText}`);
   }
 
-  const data = await response.json();
-  return {
-    taskId: data.id ?? data.task_id ?? "",
-    liveUrl:
-      data.liveUrl ??
-      data.live_url ??
-      data.publicShareUrl ??
-      `https://cloud.browser-use.com/tasks/${data.id ?? data.task_id ?? ""}`,
-  };
+  return fallbackResponse;
 }
 
 async function pollBrowserUseTask(

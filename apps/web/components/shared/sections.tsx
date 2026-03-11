@@ -60,237 +60,65 @@ export function MarketplaceCard({
     ) => Promise<void> | void;
   };
 }) {
-  const { supportedFields, unsupportedFields } = useMemo(
-    () => extractConfigFields(template.templateConfig.inputSchema),
-    [template.templateConfig.inputSchema]
-  );
-  const [isInstallOpen, setIsInstallOpen] = useState(false);
-  const [currentValues, setCurrentValues] = useState<Record<string, EditableConfigValue>>(
-    () => getEditableConfigValues(template.templateConfig)
-  );
+  const sourceLabel = template.source === "dev" ? "Official" : "Student-built";
 
-  useEffect(() => {
-    setCurrentValues(getEditableConfigValues(template.templateConfig));
-  }, [template.id, template.templateConfig]);
-
-  useEffect(() => {
-    if (installControls?.isInstalled) {
-      setIsInstallOpen(false);
-    }
-  }, [installControls?.isInstalled]);
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const handleInstall = async () => {
     if (!installControls?.onInstall) {
       return;
     }
 
-    await installControls.onInstall(template, currentValues);
+    await installControls.onInstall(template, getEditableConfigValues(template.templateConfig));
   };
 
   return (
-    <article className="market-card" id={template.id}>
-      <div className="market-card-head">
-        <div>
-          <h3>{template.title}</h3>
-          <p>{template.description}</p>
-        </div>
-        <span className={`status-chip ${template.source}`}>{template.trustLabel}</span>
-      </div>
-      <dl className="meta-grid">
-        <div>
-          <dt>Category</dt>
-          <dd>{template.category}</dd>
-        </div>
-        <div>
-          <dt>Installs</dt>
-          <dd>{template.installs}</dd>
-        </div>
-        <div>
-          <dt>Default cadence</dt>
-          <dd>{template.scheduleDefault}</dd>
-        </div>
-        <div>
-          <dt>Status</dt>
-          <dd>{formatStatus(template.status)}</dd>
-        </div>
-      </dl>
-      <div className="market-card-list">
-        <div>
-          <h4>Setup</h4>
-          <ul>
-            {template.setupFields.map((field) => (
-              <li key={field}>{field}</li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h4>Outputs</h4>
-          <ul>
-            {template.outcomes.map((outcome) => (
-              <li key={outcome}>{outcome}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {installControls?.enabled && isInstallOpen ? (
-        <form className="inline-form" onSubmit={handleSubmit}>
-          {supportedFields.length > 0 ? (
-            <div className="field-grid">
-              {supportedFields.map((field) => {
-                const value = currentValues[field.key];
-
-                if (field.type === "textarea") {
-                  return (
-                    <label
-                      key={field.key}
-                      className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
-                    >
-                      <span>{field.label}</span>
-                      <textarea
-                        onChange={(event) =>
-                          setCurrentValues((previousValues) => ({
-                            ...previousValues,
-                            [field.key]: event.target.value,
-                          }))
-                        }
-                        required={field.required}
-                        rows={4}
-                        value={String(value ?? "")}
-                      />
-                      {field.description ? <small className="field-hint">{field.description}</small> : null}
-                    </label>
-                  );
-                }
-
-                if (field.type === "select") {
-                  return (
-                    <label
-                      key={field.key}
-                      className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
-                    >
-                      <span>{field.label}</span>
-                      <select
-                        onChange={(event) =>
-                          setCurrentValues((previousValues) => ({
-                            ...previousValues,
-                            [field.key]: event.target.value,
-                          }))
-                        }
-                        required={field.required}
-                        value={String(value ?? "")}
-                      >
-                        <option value="">Select an option</option>
-                        {(field.options ?? []).map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      {field.description ? <small className="field-hint">{field.description}</small> : null}
-                    </label>
-                  );
-                }
-
-                if (field.type === "boolean" || field.type === "checkbox") {
-                  return (
-                    <label key={field.key} className="checkbox-field">
-                      <input
-                        checked={Boolean(value)}
-                        onChange={(event) =>
-                          setCurrentValues((previousValues) => ({
-                            ...previousValues,
-                            [field.key]: event.target.checked,
-                          }))
-                        }
-                        type="checkbox"
-                      />
-                      <span>{field.label}</span>
-                    </label>
-                  );
-                }
-
-                return (
-                  <label
-                    key={field.key}
-                    className={field.uiWidth === "compact" ? "form-field compact" : "form-field"}
-                  >
-                    <span>{field.label}</span>
-                    <input
-                      onChange={(event) =>
-                        setCurrentValues((previousValues) => ({
-                          ...previousValues,
-                          [field.key]: event.target.value,
-                        }))
-                      }
-                      required={field.required}
-                      type={
-                        field.type === "email" || field.type === "url" || field.type === "password"
-                          ? field.type
-                          : "text"
-                      }
-                      value={String(value ?? "")}
-                    />
-                    {field.description ? <small className="field-hint">{field.description}</small> : null}
-                  </label>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="form-note">
-              This template can be installed with its backend defaults.
-            </p>
-          )}
-
-          {unsupportedFields.length > 0 ? (
-            <p className="form-note">
-              Some advanced setup fields are not editable yet and will keep their default values.
-            </p>
-          ) : null}
-
-          {installControls.error ? (
-            <p className="form-message error">{installControls.error}</p>
-          ) : null}
-
-          <div className="card-actions">
-            <button disabled={installControls.isInstalling} type="submit">
-              {installControls.isInstalling ? "Installing..." : "Save and install"}
-            </button>
-            <button
-              className="secondary"
-              onClick={() => setIsInstallOpen(false)}
-              type="button"
-            >
-              Cancel
-            </button>
+    <article className="store-tile" id={template.id}>
+      <div className="tile-preview">
+        {template.imageSrc ? (
+          <Image
+            alt={`${template.title} artwork`}
+            className="tile-image"
+            fill
+            sizes="(max-width: 820px) 100vw, (max-width: 1100px) 50vw, 25vw"
+            src={template.imageSrc}
+          />
+        ) : (
+          <div className={`tile-logo ${template.iconKey}`}>
+            <span>{template.iconGlyph}</span>
           </div>
-        </form>
-      ) : null}
-
-      <div className="card-actions">
+        )}
+        <div className="tile-preview-fill" />
+      </div>
+      <div className="store-tile-body">
+        <h3>{template.title}</h3>
+        <p className="store-meta-line">
+          {sourceLabel} {template.installs} {template.category}
+        </p>
+        <p>{template.description}</p>
+      </div>
+      <div className="tile-actions">
         {installControls?.enabled ? (
           <button
+            className="tile-button"
             disabled={installControls.isInstalling || installControls.isInstalled}
-            onClick={() => setIsInstallOpen((currentValue) => !currentValue)}
+            onClick={() => void handleInstall()}
             type="button"
           >
-            {installControls.isInstalled
-              ? "Installed"
-              : isInstallOpen
-                ? "Hide setup"
-                : "Install template"}
+            {installControls.isInstalling
+              ? "Installing..."
+              : installControls.isInstalled
+                ? "Installed"
+                : "Install"}
           </button>
         ) : (
-          <Link className="button-link" href="/my-agents">
-            Install template
+          <Link className="button-link tile-button" href="/my-agents">
+            Install
           </Link>
         )}
-        <Link className="button-link secondary" href={`/marketplace#${template.id}`}>
-          View details
+        <Link className="catalog-link" href="/my-agents">
+          Details
         </Link>
       </div>
+      {installControls?.error ? <p className="form-message error">{installControls.error}</p> : null}
     </article>
   );
 }
@@ -592,12 +420,14 @@ export function AgentTable({
 export function AgentDetailPanel({
   agent,
   details,
+  template,
   activeTab,
   onTabChange,
   editControls,
 }: {
   agent?: Agent;
   details: AgentDetailData;
+  template?: MarketplaceTemplate;
   activeTab: "progress" | "results" | "history";
   onTabChange: (tab: "progress" | "results" | "history") => void;
   editControls?: {
@@ -645,10 +475,7 @@ export function AgentDetailPanel({
   }
 
   const currentRun = details.currentRun ?? agent.currentRun;
-  const debugLink =
-    currentRun?.liveUrl && !currentRun.liveUrl.includes("cloud.browser-use.com/tasks/")
-      ? currentRun.liveUrl
-      : null;
+  const debugLink = currentRun?.liveUrl ?? null;
 
   if (details.isLoading) {
     return (
@@ -873,12 +700,12 @@ export function AgentDetailPanel({
             {currentRun?.browserUseTaskId ? (
               <p className="form-note">Task ID: {currentRun.browserUseTaskId}</p>
             ) : null}
-            {debugLink ? (
-              <a className="text-action" href={debugLink} rel="noreferrer" target="_blank">
-                Open provider debug link
-              </a>
-            ) : null}
-          </article>
+          {debugLink ? (
+            <a className="text-action" href={debugLink} rel="noreferrer" target="_blank">
+              Open live browser
+            </a>
+          ) : null}
+        </article>
 
           <article className="detail-card">
             <h4>Needs your input</h4>
@@ -894,6 +721,32 @@ export function AgentDetailPanel({
             ) : (
               <p className="empty-state">No open actions for this agent.</p>
             )}
+          </article>
+
+          <article className="detail-card detail-card-wide">
+            <h4>Workflow details</h4>
+            <div className="detail-stack">
+              <div className="inline-note">
+                <strong>Overview</strong>
+                <span>{template?.description ?? "Template details will appear here after install."}</span>
+              </div>
+              <div className="inline-note">
+                <strong>Inputs</strong>
+                <span>
+                  {template?.setupFields.length
+                    ? template.setupFields.join(", ")
+                    : "No setup fields listed for this workflow."}
+                </span>
+              </div>
+              <div className="inline-note">
+                <strong>Outputs</strong>
+                <span>
+                  {template?.outcomes.length
+                    ? template.outcomes.join(", ")
+                    : "No outputs listed for this workflow."}
+                </span>
+              </div>
+            </div>
           </article>
 
           <article className="detail-card detail-card-wide">

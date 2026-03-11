@@ -1027,6 +1027,12 @@ textarea,
   line-height: 1.5;
 }
 
+.store-meta-line {
+  color: var(--accent-deep);
+  font-size: 0.92rem;
+  letter-spacing: 0.01em;
+}
+
 .tile-actions {
   display: flex;
   align-items: center;

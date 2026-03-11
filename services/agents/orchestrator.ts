@@ -358,7 +358,7 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
       return [
         `Navigate to ${scholarUrl}.`,
         "Continue the in-progress scholarship search flow using the current browser context.",
-        "If a login or MFA screen blocks progress, stop at the blocking screen and report the blocker.",
+        "If a UT EID login page appears, DO NOT enter any credentials yourself. Wait for the user to sign in manually in the browser window. Keep checking the page every few seconds until the URL changes away from the login page, then continue.",
         "Do NOT click any final Submit button.",
       ].join(" ");
     }
@@ -398,7 +398,11 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
       `CRITICAL RULES:`,
       `- DO NOT click any Submit, Search, or Apply button.`,
       `- DO NOT navigate away from the search page after filling fields.`,
-      `- If you encounter a login page, stop and report that authentication is required.`,
+      `- If you are redirected to a UT EID login page (login.utexas.edu or similar):`,
+      `  - DO NOT type any credentials or interact with the login form.`,
+      `  - The user will sign in manually in the browser window and approve the Duo push.`,
+      `  - Wait and keep checking the page every 5-10 seconds until the URL changes away from the login page.`,
+      `  - Once the login is complete and you are redirected back, continue with the scholarship search.`,
       `- If a dropdown does not have an exact match, pick the closest available option.`,
       `- Take your time to find and fill ALL available fields before stopping.`,
     ]
@@ -429,8 +433,8 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
       "Open the UT registration portal in the local browser context.",
       `Watch the configured registration numbers for ${semester}: ${targetSummary}.`,
       "When one of the watched sections opens, immediately continue through the registration flow for that exact registration number.",
-      "If a conflict, hold, or authentication step blocks the registration, report the blocker with the affected registration number.",
-      "If authentication is required, pause and report the required user action.",
+      "If a conflict or hold blocks the registration, report the blocker with the affected registration number.",
+      "If redirected to a UT EID login page, DO NOT enter any credentials. Wait for the user to sign in manually in the browser window and approve the Duo push. Keep checking the page every 5-10 seconds until the URL changes away from the login page, then continue.",
     ]
       .filter((line) => Boolean(line))
       .join(" ");
@@ -450,7 +454,7 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
       return [
         `Navigate to ${eurekaUrl}.`,
         "Continue reviewing the lab opening listings in the current browser context.",
-        "If a login page blocks progress, stop and report the blocker.",
+        "If a UT EID login page appears, DO NOT enter any credentials. Wait for the user to sign in manually in the browser window and approve the Duo push. Keep checking the page every 5-10 seconds until the URL changes, then continue.",
         "Do NOT submit any applications or send any emails.",
       ].join(" ");
     }
@@ -486,7 +490,11 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
       `CRITICAL RULES:`,
       `- DO NOT submit any applications or send any emails.`,
       `- DO NOT click on any Apply or Contact buttons.`,
-      `- If you encounter a login page, stop and report that authentication is required.`,
+      `- If you are redirected to a UT EID login page (login.utexas.edu or similar):`,
+      `  - DO NOT type any credentials or interact with the login form.`,
+      `  - The user will sign in manually in the browser window and approve the Duo push.`,
+      `  - Wait and keep checking the page every 5-10 seconds until the URL changes away from the login page.`,
+      `  - Once the login is complete and you are redirected back, continue scanning research opportunities.`,
       `- Focus on positions that match the student's major and research interests.`,
       `- Take your time to thoroughly scan all available listings.`,
     ]
@@ -531,7 +539,7 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
       `  - Role: ${role === "captain" ? `Captain (team name: "${teamName}")` : "Free Agent"}`,
       ``,
       `Step-by-step instructions:`,
-      `1. Navigate to https://www.imleagues.com/UTexas. Authenticate via UT Shibboleth if prompted (use UT EID).`,
+      `1. Navigate to https://www.imleagues.com/UTexas. If redirected to a UT login page, DO NOT enter credentials — wait for the user to sign in manually in the browser window. Keep checking every 5-10 seconds until the page changes.`,
       `2. Click on the "Sports" tab to view available intramural sports for the current term.`,
       `3. For each sport the student is interested in (${sports}):`,
       `   a. Click on the sport name to see available divisions.`,
@@ -547,7 +555,7 @@ function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string
       `CRITICAL RULES:`,
       `- DO NOT submit payment or complete final registration.`,
       `- DO NOT click any "Confirm" or "Pay" button.`,
-      `- If UT Shibboleth login is required, stop and report that authentication is needed.`,
+      `- If UT Shibboleth or EID login is required, DO NOT enter credentials. Wait for the user to sign in manually in the browser window and approve the Duo push. Keep checking the page every 5-10 seconds until the URL changes, then continue.`,
       `- Registration is first come, first served — note how many spots remain.`,
       `- If a preferred sport has closed registration, note when the next registration window opens.`,
     ].filter((line) => line !== "").join("\n");
