@@ -1,14 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { listByScenario } from "../../../convex/agentLogs.ts";
-import {
-    create as createAgent,
-    getById as getAgentById,
-} from "../../../convex/agents.ts";
-import { DEFAULT_USER_ID, resetRuntimeStore } from "../../../convex/runtimeStore.ts";
+import { listLogsByScenario, getAgentById } from "../shared/runtimeAdapters.ts";
+import { DEFAULT_USER_ID, resetRuntimeStore, getRuntimeStore, nextId } from "../../../convex/runtimeStore.ts";
 import { getBrowserUseClient, resetBrowserUseMock } from "../../agents/browserUseClient.ts";
 import { triggerAgentRun } from "../../agents/orchestrator.ts";
+
+function createAgent(type: string, config: Record<string, unknown>) {
+    const agentId = nextId("agent");
+    const agent: any = {
+        id: agentId,
+        userId: DEFAULT_USER_ID,
+        templateId: "tpl_mock",
+        ownerType: "first_party",
+        type,
+        status: "active",
+        config: {
+            schemaVersion: "1.0",
+            inputSchema: {},
+            defaultConfig: config,
+        },
+        schedule: { enabled: false, cron: "", timezone: "America/Chicago" },
+        lastRunStatus: "idle",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    };
+    getRuntimeStore().agents.set(agentId, agent);
+    return agent;
+}
 
 function resetAll(): void {
     process.env.BROWSER_USE_MODE = "mock";
@@ -54,7 +73,7 @@ test("flowforge_happy_path: custom agent runs with NL prompt forwarded to browse
     );
 
     // Verify scenario logs
-    const logs = listByScenario("flowforge_happy_path");
+    const logs = listLogsByScenario("flowforge_happy_path");
     assert.ok(logs.length >= 2, "flowforge_happy_path logs should have start + success events");
     const events = logs.map((log) => log.event);
     assert.ok(events.includes("start"), "custom agent logs must include start");

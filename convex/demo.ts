@@ -78,6 +78,31 @@ const demoTemplates: DemoTemplateSeed[] = [
     approvedAt: NOW - 1000 * 60 * 60 * 24 * 55,
   },
   {
+    title: "IMBot",
+    description:
+      "Scans UT RecSports IMLeagues for open intramural registration, matches your sport and schedule preferences, and signs you up before spots fill.",
+    source: "dev",
+    category: "Intramurals",
+    visibility: "public",
+    templateType: "im",
+    installCount: 312,
+    cadenceLabel: "Hourly during registration windows",
+    setupFields: [
+      "Preferred sports",
+      "Skill level (A/B/C)",
+      "Preferred days & times",
+      "Role (captain or free agent)",
+    ],
+    outcomes: ["Sport matching", "Slot availability check", "Registration confirmation"],
+    defaultSchedule: {
+      enabled: true,
+      cron: "0 * * * *",
+      timezone: "America/Chicago",
+      jitterMinutes: 5,
+    },
+    approvedAt: NOW - 1000 * 60 * 60 * 24 * 30,
+  },
+  {
     title: "Financial Aid Audit",
     description:
       "Tracks aid portal changes, missing documents, and deadline movement for students managing multiple aid workflows.",
@@ -133,6 +158,43 @@ const demoTemplates: DemoTemplateSeed[] = [
       timezone: "America/Chicago",
     },
   },
+  {
+    title: "Study Abroad Bot",
+    description:
+      "Tracks program deadlines, required forms, and country-specific steps so students can stay ahead of study abroad planning.",
+    source: "student",
+    category: "Campus life",
+    visibility: "public",
+    templateType: "custom",
+    installCount: 41,
+    cadenceLabel: "Twice weekly check-in",
+    setupFields: ["Target region", "Program interests", "Deadline reminders"],
+    outcomes: ["Program tracking", "Form reminders", "Timeline digest"],
+    defaultSchedule: {
+      enabled: true,
+      cron: "0 8 * * 2,5",
+      timezone: "America/Chicago",
+    },
+    approvedAt: NOW - 1000 * 60 * 60 * 24 * 10,
+  },
+  {
+    title: "Intramural Sports Bot",
+    description:
+      "Watches intramural registration windows, roster deadlines, and open league spots for students joining campus sports.",
+    source: "student",
+    category: "Campus life",
+    visibility: "public",
+    templateType: "custom",
+    installCount: 33,
+    cadenceLabel: "Daily during registration season",
+    setupFields: ["Sports interests", "League level", "Preferred reminders"],
+    outcomes: ["Registration tracking", "Roster reminders", "Open spot alerts"],
+    defaultSchedule: {
+      enabled: true,
+      cron: "0 9 * * *",
+      timezone: "America/Chicago",
+    },
+  },
 ];
 
 const semesterOptions = [
@@ -146,6 +208,80 @@ const semesterOptions = [
 ];
 
 function buildInputSchema(seed: DemoTemplateSeed) {
+  if (seed.title === "IMBot") {
+    return {
+      fields: [
+        {
+          key: "sports",
+          label: "Preferred sports",
+          type: "multiselect",
+          required: true,
+          options: [
+            { label: "Basketball", value: "Basketball" },
+            { label: "Flag Football", value: "Flag Football" },
+            { label: "Soccer", value: "Soccer" },
+            { label: "Dodgeball", value: "Dodgeball" },
+            { label: "Sand Volleyball", value: "Sand Volleyball" },
+            { label: "Softball", value: "Softball" },
+            { label: "Ultimate", value: "Ultimate" },
+            { label: "Indoor Volleyball", value: "Indoor Volleyball" },
+          ],
+        },
+        {
+          key: "division",
+          label: "Skill level",
+          type: "select",
+          required: true,
+          options: [
+            { label: "A — Competitive", value: "A" },
+            { label: "B — Intermediate", value: "B" },
+            { label: "C — Recreational", value: "C" },
+          ],
+        },
+        {
+          key: "preferredDays",
+          label: "Preferred days",
+          type: "multiselect",
+          required: true,
+          options: [
+            { label: "Sunday", value: "Sunday" },
+            { label: "Monday", value: "Monday" },
+            { label: "Tuesday", value: "Tuesday" },
+            { label: "Wednesday", value: "Wednesday" },
+            { label: "Thursday", value: "Thursday" },
+            { label: "Friday", value: "Friday" },
+          ],
+        },
+        {
+          key: "preferredTime",
+          label: "Preferred time",
+          type: "select",
+          required: true,
+          options: [
+            { label: "Afternoon (12–5 PM)", value: "afternoon" },
+            { label: "Evening (5–10 PM)", value: "evening" },
+          ],
+        },
+        {
+          key: "role",
+          label: "Role",
+          type: "select",
+          required: true,
+          options: [
+            { label: "Free Agent — join an existing team", value: "free_agent" },
+            { label: "Captain — create your own team", value: "captain" },
+          ],
+        },
+        {
+          key: "teamName",
+          label: "Team name (captains only)",
+          type: "text",
+          required: false,
+        },
+      ],
+    } as ConfigEnvelope["inputSchema"];
+  }
+
   if (seed.title === "RegBot") {
     return {
       fields: [
@@ -208,6 +344,16 @@ function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
             conflictPolicy: "",
           }
         : {}),
+      ...(seed.title === "IMBot"
+        ? {
+            sports: ["Basketball", "Flag Football", "Soccer"],
+            division: "C",
+            preferredDays: ["Sunday", "Tuesday", "Thursday"],
+            preferredTime: "evening",
+            role: "free_agent",
+            teamName: "",
+          }
+        : {}),
     },
     defaultSchedule: seed.defaultSchedule,
     currentConfig: {
@@ -220,6 +366,16 @@ function buildTemplateConfig(seed: DemoTemplateSeed): ConfigEnvelope {
             uniqueId: "",
             semester: "Fall 2026",
             conflictPolicy: "",
+          }
+        : {}),
+      ...(seed.title === "IMBot"
+        ? {
+            sports: ["Basketball", "Flag Football", "Soccer"],
+            division: "C",
+            preferredDays: ["Sunday", "Tuesday", "Thursday"],
+            preferredTime: "evening",
+            role: "free_agent",
+            teamName: "",
           }
         : {}),
     },
@@ -373,6 +529,13 @@ async function ensureAgents(
       lastRunStatus: "succeeded" as const,
       lastRunAt: NOW - 1000 * 60 * 60 * 26,
       nextRunAt: NOW + 1000 * 60 * 60 * 31,
+    },
+    {
+      templateTitle: "IMBot",
+      status: "active" as const,
+      lastRunStatus: "succeeded" as const,
+      lastRunAt: NOW - 1000 * 60 * 45,
+      nextRunAt: NOW + 1000 * 60 * 15,
     },
     {
       templateTitle: "Financial Aid Audit",

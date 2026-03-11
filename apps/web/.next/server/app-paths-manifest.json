@@ -1,7 +1,0 @@
-{
-  "/api/demo/scholar/route": "app/api/demo/scholar/route.js",
-  "/studio/page": "app/studio/page.js",
-  "/my-agents/page": "app/my-agents/page.js",
-  "/login/page": "app/login/page.js",
-  "/onboarding/page": "app/onboarding/page.js"
-}

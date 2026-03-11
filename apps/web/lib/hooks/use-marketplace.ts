@@ -71,12 +71,18 @@ export function useMarketplaceTemplates(source?: TemplateSource): {
           ? studentResult?.items ?? []
           : [...(devResult?.items ?? []), ...(studentResult?.items ?? [])];
 
-    return items.map((record) => toMarketplaceTemplate(record as never));
+    return items
+      .map((record) => toMarketplaceTemplate(record as never))
+      .sort((left, right) => right.installs - left.installs);
   }, [convexEnabled, devResult?.items, source, studentResult?.items]);
 
   return {
     templates,
-    isLoading: convexEnabled && ((source === "dev" && !devResult) || (source === "student" && !studentResult) || (!source && (!devResult || !studentResult))),
+    isLoading:
+      convexEnabled &&
+      ((source === "dev" && !devResult) ||
+        (source === "student" && !studentResult) ||
+        (!source && (!devResult || !studentResult))),
   };
 }
 

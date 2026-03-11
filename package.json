@@ -1,13 +1,16 @@
 {
   "name": "longhornet",
   "private": true,
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
     "dev:convex": "npx convex dev",
     "build": "npm run build --workspace=apps/web"
   },
   "dependencies": {
+    "browser-use-sdk": "^3.3.0",
     "convex": "^1.17.4"
   },
   "devDependencies": {

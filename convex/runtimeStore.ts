@@ -1,44 +1,23 @@
 import type {
   AgentLogRecord,
   AgentRecord,
+  IntramuralSignupRecord,
+  JsonObject,
+  MarketplaceTemplateRecord,
   PendingActionRecord,
   RegistrationMonitorRecord,
   ScholarshipRecord,
   ScheduledTaskRecord,
+  TemplateSubmissionRecord,
 } from "./types/contracts.ts";
-
-interface RuntimeMarketplaceTemplate {
-  id: string;
-  title: string;
-  description: string;
-  source: "dev" | "student";
-  visibility: "public" | "private";
-  category: string;
-  installCount: number;
-  templateConfig: Record<string, unknown>;
-  agentType: "scholar" | "reg" | "custom";
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface RuntimeTemplateSubmission {
-  id: string;
-  userId: string;
-  templateId?: string;
-  status: string;
-  draftPayload?: Record<string, unknown>;
-  reviewerId?: string;
-  reviewNotes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface RuntimeStore {
   agents: Map<string, AgentRecord>;
-  marketplaceTemplates: Map<string, RuntimeMarketplaceTemplate>;
-  templateSubmissions: Map<string, RuntimeTemplateSubmission>;
+  marketplaceTemplates: Map<string, MarketplaceTemplateRecord>;
+  templateSubmissions: Map<string, TemplateSubmissionRecord>;
   scholarships: Map<string, ScholarshipRecord>;
   registrationMonitors: Map<string, RegistrationMonitorRecord>;
+  intramuralSignups: Map<string, IntramuralSignupRecord>;
   pendingActions: Map<string, PendingActionRecord>;
   agentLogs: Map<string, AgentLogRecord>;
   scheduledTasks: Map<string, ScheduledTaskRecord>;
@@ -48,6 +27,7 @@ interface RuntimeStore {
 export const DEFAULT_USER_ID = "user_demo";
 export const SCHOLARBOT_TEMPLATE_ID = "tpl_dev_scholarbot";
 export const REGBOT_TEMPLATE_ID = "tpl_dev_regbot";
+export const IMBOT_TEMPLATE_ID = "tpl_dev_imbot";
 export const STUDENT_TEMPLATE_ID = "tpl_student_custom";
 
 const store: RuntimeStore = {
@@ -56,19 +36,29 @@ const store: RuntimeStore = {
   templateSubmissions: new Map(),
   scholarships: new Map(),
   registrationMonitors: new Map(),
+  intramuralSignups: new Map(),
   pendingActions: new Map(),
   agentLogs: new Map(),
   scheduledTasks: new Map(),
   idCounters: new Map(),
 };
 
-function nowIso(): string {
-  return new Date().toISOString();
+function nowTimestamp(): number {
+  return Date.now();
+}
+
+function createTemplateConfig(defaultConfig: JsonObject): MarketplaceTemplateRecord["templateConfig"] {
+  return {
+    schemaVersion: "1.0.0",
+    inputSchema: {},
+    defaultConfig,
+    currentConfig: defaultConfig,
+  };
 }
 
 function seedTemplates(): void {
-  const ts = nowIso();
-  const baseTemplates: RuntimeMarketplaceTemplate[] = [
+  const ts = nowTimestamp();
+  const baseTemplates: MarketplaceTemplateRecord[] = [
     {
       id: SCHOLARBOT_TEMPLATE_ID,
       title: "ScholarBot",
@@ -77,15 +67,15 @@ function seedTemplates(): void {
       visibility: "public",
       category: "scholarships",
       installCount: 0,
-      templateConfig: {
+      templateConfig: createTemplateConfig({
         sources: ["UT Scholarships", "FastWeb"],
         requireEssay: true,
         profile: {
           major: "CS",
           classification: "Undergraduate",
         },
-      },
-      agentType: "scholar",
+      }),
+      templateType: "scholar",
       createdAt: ts,
       updatedAt: ts,
     },
@@ -97,15 +87,34 @@ function seedTemplates(): void {
       visibility: "public",
       category: "registration",
       installCount: 0,
-      templateConfig: {
+      templateConfig: createTemplateConfig({
         semester: "Fall 2026",
         courseNumber: "CS 378",
         uniqueId: "12345",
         pollIntervalMinutes: 10,
         seatAvailableOnAttempt: 1,
         duoTimeoutAttempts: 0,
-      },
-      agentType: "reg",
+      }),
+      templateType: "reg",
+      createdAt: ts,
+      updatedAt: ts,
+    },
+    {
+      id: IMBOT_TEMPLATE_ID,
+      title: "IMBot",
+      description: "First-party intramural sports tracker and registration automation via IMLeagues.",
+      source: "dev",
+      visibility: "public",
+      category: "intramurals",
+      installCount: 0,
+      templateConfig: createTemplateConfig({
+        sports: ["Basketball", "Flag Football", "Soccer"],
+        division: "C",
+        role: "free_agent",
+        preferredDays: ["Sunday", "Tuesday", "Thursday"],
+        preferredTime: "evening",
+      }),
+      templateType: "im",
       createdAt: ts,
       updatedAt: ts,
     },
@@ -117,17 +126,17 @@ function seedTemplates(): void {
       visibility: "public",
       category: "custom",
       installCount: 0,
-      templateConfig: {
+      templateConfig: createTemplateConfig({
         dryRunOnly: true,
-      },
-      agentType: "custom",
+      }),
+      templateType: "custom",
       createdAt: ts,
       updatedAt: ts,
     },
   ];
 
   for (const template of baseTemplates) {
-    store.marketplaceTemplates.set(template.id as string, template);
+    store.marketplaceTemplates.set(template.id, template);
   }
 }
 
@@ -137,6 +146,7 @@ export function resetRuntimeStore(): void {
   store.templateSubmissions.clear();
   store.scholarships.clear();
   store.registrationMonitors.clear();
+  store.intramuralSignups.clear();
   store.pendingActions.clear();
   store.agentLogs.clear();
   store.scheduledTasks.clear();

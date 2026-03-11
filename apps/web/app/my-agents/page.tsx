@@ -20,6 +20,7 @@ export default function MyAgentsPage() {
   const { runNow, updateStatus, deleteAgent } = useAgentActions();
   const [busyAgentId, setBusyAgentId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   if (convexEnabled && !isReady) {
     return (
@@ -36,9 +37,12 @@ export default function MyAgentsPage() {
   const handleRunNow = async (agentId: string) => {
     setBusyAgentId(agentId);
     setActionError(null);
+    setActionSuccess(null);
 
     try {
       await runNow(agentId);
+      setActionSuccess("Agent launched! Check the activity feed below for updates.");
+      setTimeout(() => setActionSuccess(null), 5000);
     } catch (error) {
       setActionError(getErrorMessage(error, "Agent run could not be requested."));
     } finally {
@@ -83,6 +87,20 @@ export default function MyAgentsPage() {
           actionLabel="Install from marketplace"
         />
       </section>
+
+      {actionSuccess && (
+        <section className="page-section">
+          <div style={{
+            padding: "12px 16px",
+            background: "#0f5132",
+            color: "#d1e7dd",
+            borderRadius: "8px",
+            fontSize: "14px",
+          }}>
+            {actionSuccess}
+          </div>
+        </section>
+      )}
 
       <section className="page-section">
         <AgentTable
