@@ -15,6 +15,15 @@ export const scholarshipStatusValidator = v.union(
   v.literal("expired")
 );
 
+export const labOpeningStatusValidator = v.union(
+  v.literal("discovered"),
+  v.literal("reviewing"),
+  v.literal("drafting_email"),
+  v.literal("email_ready"),
+  v.literal("contacted"),
+  v.literal("expired")
+);
+
 export const monitorStatusValidator = v.union(
   v.literal("watching"),
   v.literal("registered"),
@@ -37,7 +46,8 @@ export const intramuralRoleValidator = v.union(
 export const pendingActionTypeValidator = v.union(
   v.literal("essay"),
   v.literal("detail"),
-  v.literal("confirmation")
+  v.literal("confirmation"),
+  v.literal("email_draft")
 );
 
 export const templateSourceValidator = v.union(v.literal("dev"), v.literal("student"));
@@ -70,6 +80,7 @@ export const agentOwnerTypeValidator = v.union(
 export const agentTypeValidator = v.union(
   v.literal("scholar"),
   v.literal("reg"),
+  v.literal("eureka"),
   v.literal("im"),
   v.literal("custom")
 );
@@ -126,6 +137,7 @@ export const agentDeleteModeValidator = v.union(
 export const scenarioIdValidator = v.union(
   v.literal("scholarbot_happy_path"),
   v.literal("regbot_happy_path"),
+  v.literal("eurekabot_happy_path"),
   v.literal("flowforge_happy_path"),
   v.literal("regbot_duo_timeout"),
   v.literal("webhook_retry_path"),
