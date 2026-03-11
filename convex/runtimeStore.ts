@@ -48,7 +48,7 @@ function nowIso(): string {
 
 function seedTemplates(): void {
   const ts = nowIso();
-  const baseTemplates: Record<string, unknown>[] = [
+  const baseTemplates: RuntimeMarketplaceTemplate[] = [
     {
       id: SCHOLARBOT_TEMPLATE_ID,
       title: "ScholarBot",
@@ -126,7 +126,7 @@ function seedTemplates(): void {
   ];
 
   for (const template of baseTemplates) {
-    store.marketplaceTemplates.set(template.id as string, template as unknown as MarketplaceTemplateRecord);
+    store.marketplaceTemplates.set(template.id, template);
   }
 }
 
