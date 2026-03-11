@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import type {
   Agent,
   AgentEvent,
@@ -118,6 +121,54 @@ export function FilterBar({
   );
 }
 
+function ScholarDemoButton() {
+  const [state, setState] = useState<"idle" | "launching" | "launched" | "error">("idle");
+  const [liveUrl, setLiveUrl] = useState<string | null>(null);
+
+  async function handleClick() {
+    if (state === "launched" && liveUrl) {
+      window.open(liveUrl, "_blank");
+      return;
+    }
+    setState("launching");
+    try {
+      const res = await fetch("/api/demo/scholar", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setState("launched");
+        setLiveUrl(data.liveUrl ?? null);
+        if (data.liveUrl) {
+          window.open(data.liveUrl, "_blank");
+        }
+      } else {
+        setState("error");
+      }
+    } catch {
+      setState("error");
+    }
+  }
+
+  const label =
+    state === "launching"
+      ? "Launching..."
+      : state === "launched"
+        ? "Watch Live"
+        : state === "error"
+          ? "Failed — retry?"
+          : "Demo";
+
+  return (
+    <button
+      className="button-link demo-btn"
+      onClick={handleClick}
+      disabled={state === "launching"}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
 export function AgentTable({ agents }: { agents: Agent[] }) {
   return (
     <div className="table-shell">
@@ -130,6 +181,7 @@ export function AgentTable({ agents }: { agents: Agent[] }) {
             <th>Next run</th>
             <th>Pending action</th>
             <th>Schedule</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -146,6 +198,9 @@ export function AgentTable({ agents }: { agents: Agent[] }) {
               <td>{agent.nextRunLabel}</td>
               <td>{agent.pendingActionLabel}</td>
               <td>{agent.scheduleLabel}</td>
+              <td>
+                {agent.type === "scholar" ? <ScholarDemoButton /> : null}
+              </td>
             </tr>
           ))}
         </tbody>

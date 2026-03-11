@@ -614,6 +614,19 @@ textarea,
   font-size: 0.92rem;
 }
 
+.demo-btn {
+  font-size: 0.85rem;
+  padding: 0.45rem 0.9rem;
+  background: var(--accent);
+  border-color: var(--accent);
+  white-space: nowrap;
+}
+
+.demo-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .table-status.active {
   color: var(--success);
   border-color: rgba(54, 95, 67, 0.28);
