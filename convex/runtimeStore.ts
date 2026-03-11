@@ -1,10 +1,18 @@
 import type {
   AgentLogRecord,
   AgentRecord,
+<<<<<<< HEAD
+=======
+  MarketplaceTemplateRecord,
+>>>>>>> origin/main
   PendingActionRecord,
   RegistrationMonitorRecord,
   ScholarshipRecord,
   ScheduledTaskRecord,
+<<<<<<< HEAD
+=======
+  TemplateSubmissionRecord,
+>>>>>>> origin/main
 } from "./types/contracts.ts";
 
 interface RuntimeMarketplaceTemplate {
@@ -35,8 +43,13 @@ interface RuntimeTemplateSubmission {
 
 interface RuntimeStore {
   agents: Map<string, AgentRecord>;
+<<<<<<< HEAD
   marketplaceTemplates: Map<string, RuntimeMarketplaceTemplate>;
   templateSubmissions: Map<string, RuntimeTemplateSubmission>;
+=======
+  marketplaceTemplates: Map<string, MarketplaceTemplateRecord>;
+  templateSubmissions: Map<string, TemplateSubmissionRecord>;
+>>>>>>> origin/main
   scholarships: Map<string, ScholarshipRecord>;
   registrationMonitors: Map<string, RegistrationMonitorRecord>;
   pendingActions: Map<string, PendingActionRecord>;
@@ -68,7 +81,11 @@ function nowIso(): string {
 
 function seedTemplates(): void {
   const ts = nowIso();
+<<<<<<< HEAD
   const baseTemplates: RuntimeMarketplaceTemplate[] = [
+=======
+  const baseTemplates: Record<string, unknown>[] = [
+>>>>>>> origin/main
     {
       id: SCHOLARBOT_TEMPLATE_ID,
       title: "ScholarBot",
@@ -127,7 +144,7 @@ function seedTemplates(): void {
   ];
 
   for (const template of baseTemplates) {
-    store.marketplaceTemplates.set(template.id, template);
+    store.marketplaceTemplates.set(template.id as string, template as unknown as MarketplaceTemplateRecord);
   }
 }
 

@@ -312,6 +312,54 @@ export function FilterBar({
   );
 }
 
+function ScholarDemoButton() {
+  const [state, setState] = useState<"idle" | "launching" | "launched" | "error">("idle");
+  const [liveUrl, setLiveUrl] = useState<string | null>(null);
+
+  async function handleClick() {
+    if (state === "launched" && liveUrl) {
+      window.open(liveUrl, "_blank");
+      return;
+    }
+    setState("launching");
+    try {
+      const res = await fetch("/api/demo/scholar", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setState("launched");
+        setLiveUrl(data.liveUrl ?? null);
+        if (data.liveUrl) {
+          window.open(data.liveUrl, "_blank");
+        }
+      } else {
+        setState("error");
+      }
+    } catch {
+      setState("error");
+    }
+  }
+
+  const label =
+    state === "launching"
+      ? "Launching..."
+      : state === "launched"
+        ? "Watch Live"
+        : state === "error"
+          ? "Failed — retry?"
+          : "Demo";
+
+  return (
+    <button
+      className="button-link demo-btn"
+      onClick={handleClick}
+      disabled={state === "launching"}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
 function getToggleLabel(agent: Agent): string | null {
   if (agent.status === "active") {
     return "Pause";
@@ -348,6 +396,7 @@ export function AgentTable({
             <th>Next run</th>
             <th>Pending action</th>
             <th>Schedule</th>
+            <th></th>
             {actionControls ? <th>Actions</th> : null}
           </tr>
         </thead>
@@ -369,6 +418,9 @@ export function AgentTable({
                 <td>{agent.nextRunLabel}</td>
                 <td>{agent.pendingActionLabel}</td>
                 <td>{agent.scheduleLabel}</td>
+                <td>
+                  {agent.type === "scholar" ? <ScholarDemoButton /> : null}
+                </td>
                 {actionControls ? (
                   <td>
                     <div className="agent-row-actions">

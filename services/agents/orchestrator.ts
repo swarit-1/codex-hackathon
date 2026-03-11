@@ -1,8 +1,6 @@
 declare const process: { env: Record<string, string | undefined> };
 
-import { append as appendLog } from "../../convex/agentLogs.ts";
-import { getById as getAgentById, updateById as updateAgentById } from "../../convex/agents.ts";
-import { getById as getPendingActionById } from "../../convex/pendingActions.ts";
+import { appendLog, getAgentById, updateAgentById, getPendingActionById } from "./shared/runtimeAdapters.ts";
 import type { AgentRecord, AgentRunState, AgentStatus, RunType } from "../../convex/types/contracts.ts";
 import { getBrowserUseClient } from "./browserUseClient.ts";
 import {
@@ -338,7 +336,8 @@ function mapStatusToRunState(status: AgentStatus): AgentRunState {
 function buildBrowserUseTaskPrompt(agent: AgentRecord, runType: RunType): string {
   if (agent.type === "scholar") {
     const scholarUrl = resolveScholarSearchUrl(agent);
-    const profile = (agent.config.profile as Record<string, unknown> | undefined) ?? {};
+    const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+    const profile = (configObj.profile as Record<string, unknown> | undefined) ?? {};
     const major = typeof profile.major === "string" ? profile.major : "General Studies";
     const classification = typeof profile.classification === "string" ? profile.classification : "Undergraduate";
     const gpa = typeof profile.gpa === "string" ? profile.gpa : undefined;
@@ -415,7 +414,8 @@ function buildBrowserUseStartUrl(agent: AgentRecord): string | undefined {
 }
 
 function resolveScholarSearchUrl(agent: AgentRecord): string {
-  const fromConfig = agent.config.scholarshipSearchUrl;
+  const configObj = (agent.config.currentConfig ?? agent.config.defaultConfig) as Record<string, unknown>;
+  const fromConfig = configObj.scholarshipSearchUrl;
   if (typeof fromConfig === "string" && fromConfig.trim().length > 0) {
     return fromConfig.trim();
   }
