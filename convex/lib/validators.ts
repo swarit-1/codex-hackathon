@@ -21,6 +21,19 @@ export const monitorStatusValidator = v.union(
   v.literal("failed")
 );
 
+export const intramuralSignupStatusValidator = v.union(
+  v.literal("searching"),
+  v.literal("found"),
+  v.literal("pending_confirm"),
+  v.literal("registered"),
+  v.literal("failed")
+);
+
+export const intramuralRoleValidator = v.union(
+  v.literal("captain"),
+  v.literal("free_agent")
+);
+
 export const pendingActionTypeValidator = v.union(
   v.literal("essay"),
   v.literal("detail"),
@@ -57,6 +70,7 @@ export const agentOwnerTypeValidator = v.union(
 export const agentTypeValidator = v.union(
   v.literal("scholar"),
   v.literal("reg"),
+  v.literal("im"),
   v.literal("custom")
 );
 
@@ -119,7 +133,8 @@ export const scenarioIdValidator = v.union(
   v.literal("marketplace_install_student_template"),
   v.literal("submission_pending_to_approved"),
   v.literal("my_agents_run_now"),
-  v.literal("my_agents_schedule_update")
+  v.literal("my_agents_schedule_update"),
+  v.literal("imbot_happy_path")
 );
 
 export const scheduleConfigValidator = v.object({
