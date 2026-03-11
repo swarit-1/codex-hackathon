@@ -117,6 +117,7 @@ export const marketplaceCategories: FilterOption[] = [
   { label: "Scholarships", value: "scholarships" },
   { label: "Campus admin", value: "campus-admin" },
   { label: "Research", value: "research" },
+  { label: "Campus life", value: "campus-life" },
 ];
 
 export const marketplaceTemplates: MarketplaceTemplate[] = [
@@ -138,6 +139,9 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
       "Every 10 minutes with retry jitter",
       ["Seat monitoring", "Conflict confirmation", "Duo retry handling"]
     ),
+    imageSrc: "/workflows/regbot.svg",
+    iconKey: "registration",
+    iconGlyph: "RG",
   },
   {
     id: "scholarbot",
@@ -158,6 +162,9 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
       ["Opportunity matching", "Application checkpointing", "Missing-field handoff"],
       ["Student profile", "Scholarship sources", "Resume and essay notes", "Notification method"]
     ),
+    imageSrc: "/workflows/scholarbot.svg",
+    iconKey: "scholarship",
+    iconGlyph: "SC",
   },
   {
     id: "financial-aid-audit",
@@ -178,6 +185,9 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
       ["Document reminders", "Status snapshots", "Missing-item summary"],
       ["Portal credentials", "Aid checklist targets", "Escalation preference"]
     ),
+    imageSrc: "/workflows/financial-aid-audit.svg",
+    iconKey: "admin",
+    iconGlyph: "AD",
   },
   {
     id: "lab-openings",
@@ -198,6 +208,9 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
       ["Lab opening detection", "Match digest", "Saved faculty notes"],
       ["Research interests", "Department targets", "Faculty list"]
     ),
+    imageSrc: "/workflows/lab-openings-watch.svg",
+    iconKey: "research",
+    iconGlyph: "LB",
   },
   {
     id: "travel-fund",
@@ -218,6 +231,55 @@ export const marketplaceTemplates: MarketplaceTemplate[] = [
       ["Deadline monitoring", "Requirement comparison", "Reminder queue"],
       ["College", "Degree program", "Conference timeline"]
     ),
+    imageSrc: "/workflows/conference-travel-fund-tracker.svg",
+    iconKey: "funding",
+    iconGlyph: "TR",
+  },
+  {
+    id: "study-abroad-bot",
+    title: "Study Abroad Bot",
+    description:
+      "Tracks program deadlines, required forms, and country-specific steps so students can stay ahead of study abroad planning.",
+    source: "student",
+    category: "Campus life",
+    installs: 41,
+    trustLabel: "Reviewed student workflow",
+    visibility: "public",
+    status: "approved",
+    scheduleDefault: "Twice weekly check-in",
+    setupFields: ["Target region", "Program interests", "Deadline reminders"],
+    outcomes: ["Program tracking", "Form reminders", "Timeline digest"],
+    templateConfig: createMockTemplateConfig(
+      "Twice weekly check-in",
+      ["Program tracking", "Form reminders", "Timeline digest"],
+      ["Target region", "Program interests", "Deadline reminders"]
+    ),
+    imageSrc: "/workflows/study-abroad-bot.svg",
+    iconKey: "official",
+    iconGlyph: "SA",
+  },
+  {
+    id: "intramural-sports-bot",
+    title: "Intramural Sports Bot",
+    description:
+      "Watches intramural registration windows, roster deadlines, and open league spots for students joining campus sports.",
+    source: "student",
+    category: "Campus life",
+    installs: 33,
+    trustLabel: "Pending moderation update",
+    visibility: "public",
+    status: "pending_review",
+    scheduleDefault: "Daily during registration season",
+    setupFields: ["Sports interests", "League level", "Preferred reminders"],
+    outcomes: ["Registration tracking", "Roster reminders", "Open spot alerts"],
+    templateConfig: createMockTemplateConfig(
+      "Daily during registration season",
+      ["Registration tracking", "Roster reminders", "Open spot alerts"],
+      ["Sports interests", "League level", "Preferred reminders"]
+    ),
+    imageSrc: "/workflows/intramural-sports-bot.svg",
+    iconKey: "student",
+    iconGlyph: "IM",
   },
 ];
 
