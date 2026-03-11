@@ -1,1 +1,17 @@
-export {};
+export interface SeatCheckResult {
+  available: boolean;
+  seatsOpen: number;
+}
+
+export interface SeatCheckConfig {
+  seatAvailableOnAttempt?: number;
+}
+
+export function checkSeatAvailability(attempt: number, config: SeatCheckConfig): SeatCheckResult {
+  const threshold = Math.max(1, config.seatAvailableOnAttempt ?? 1);
+  const available = attempt >= threshold;
+  return {
+    available,
+    seatsOpen: available ? 1 : 0,
+  };
+}
