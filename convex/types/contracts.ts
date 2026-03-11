@@ -234,6 +234,32 @@ export interface UserProfileRecord {
   updatedAt: number;
 }
 
+export interface UserCredentialRecord {
+  id: string;
+  userId: string;
+  email: string;
+  passwordHash: string;
+  passwordSalt: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AuthSessionRecord {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: number;
+  revokedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AuthSessionResult {
+  sessionToken: string;
+  expiresAt: number;
+  user: UserProfileRecord;
+}
+
 export interface MarketplaceTemplateRecord {
   id: string;
   title: string;

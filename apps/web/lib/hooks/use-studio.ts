@@ -14,11 +14,12 @@ export function useStudioDrafts(): {
   isLoading: boolean;
 } {
   const convexEnabled = useConvexEnabled();
-  const { userId } = useCurrentUser();
+  const { sessionToken, userId } = useCurrentUser();
   const draftsResult = useQuery(
     api.customWorkflows.listByUser,
-    convexEnabled && userId
+    convexEnabled && userId && sessionToken
       ? {
+          sessionToken,
           userId: userId as Id<"users">,
         }
       : "skip"
@@ -32,7 +33,7 @@ export function useStudioDrafts(): {
 
 export function useStudioActions() {
   const convexEnabled = useConvexEnabled();
-  const { userId } = useCurrentUser();
+  const { sessionToken, userId } = useCurrentUser();
   const generateWorkflowSpec = useAction(api.flowforge.generateWorkflowSpec);
   const generateAgentScript = useAction(api.flowforge.generateAgentScript);
   const createWorkflow = useMutation(api.customWorkflows.create);
@@ -41,7 +42,7 @@ export function useStudioActions() {
 
   return {
     generateWorkflow: async (prompt: string) => {
-      if (!convexEnabled || !userId) {
+      if (!convexEnabled || !userId || !sessionToken) {
         return null;
       }
 
@@ -52,6 +53,7 @@ export function useStudioActions() {
         spec: specResult.spec,
       });
       const workflowRecord = await createWorkflow({
+        sessionToken,
         userId: userId as Id<"users">,
         prompt,
         sourceAlias: "flowforge",
@@ -66,11 +68,12 @@ export function useStudioActions() {
       });
     },
     deployWorkflow: async (draft: StudioDraft) => {
-      if (!convexEnabled || !userId || !draft.draftPayload) {
+      if (!convexEnabled || !userId || !sessionToken || !draft.draftPayload) {
         return null;
       }
 
       const agent = await createAgent({
+        sessionToken,
         userId: userId as Id<"users">,
         type: draft.draftPayload.templateType,
         ownerType: "generated",
@@ -79,6 +82,7 @@ export function useStudioActions() {
       });
 
       await updateWorkflow({
+        sessionToken,
         workflowId: draft.id as Id<"customWorkflows">,
         agentId: agent.id as Id<"agents">,
       });

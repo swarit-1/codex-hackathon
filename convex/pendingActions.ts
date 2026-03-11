@@ -28,7 +28,7 @@ export const create = mutation({
     }
 
     const agent = toAgentRecord(agentDoc as any);
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertCanManageAgent(ctx, agent, actingUserId ?? args.userId);
 
     const timestamp = Date.now();
@@ -83,7 +83,11 @@ export const resolve = mutation({
     }
 
     const agent = toAgentRecord(agentDoc as any);
-    const actingUserId = await resolveActingUserId(ctx, pendingAction.userId);
+    const actingUserId = await resolveActingUserId(
+      ctx,
+      pendingAction.userId,
+      args.sessionToken
+    );
     await assertCanManageAgent(ctx, agent, actingUserId ?? pendingAction.userId);
 
     const resolvedAt = Date.now();
@@ -111,7 +115,7 @@ export const resolve = mutation({
 export const listByUser = query({
   args: pendingActionListArgs,
   handler: async (ctx, args) => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const docs = await queryByIndex<Omit<PendingActionRecord, "id">>(

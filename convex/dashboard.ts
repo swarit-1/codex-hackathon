@@ -17,7 +17,7 @@ import type {
 export const getOverview = query({
   args: dashboardGetOverviewArgs,
   handler: async (ctx, args) => {
-    const actingUserId = await resolveActingUserId(ctx, args.userId);
+    const actingUserId = await resolveActingUserId(ctx, args.userId, args.sessionToken);
     await assertUserOwnsResource(ctx, actingUserId, args.userId);
 
     const [agents, scholarships, monitors, pendingActions, submissions] = await Promise.all([

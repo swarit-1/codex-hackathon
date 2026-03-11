@@ -11,25 +11,25 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/marketplace/page": [
+    "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/marketplace/page.js"
+      "static/chunks/app/dashboard/page.js"
     ],
-    "/my-agents/page": [
+    "/regbot/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/my-agents/page.js"
+      "static/chunks/app/regbot/page.js"
     ],
-    "/studio/page": [
+    "/scholarbot/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/studio/page.js"
+      "static/chunks/app/scholarbot/page.js"
     ],
-    "/settings/page": [
+    "/flowforge/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/settings/page.js"
+      "static/chunks/app/flowforge/page.js"
     ]
   }
 }

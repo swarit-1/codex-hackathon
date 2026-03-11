@@ -20,6 +20,7 @@ export type ConfigFieldDefinition = {
   required: boolean;
   description?: string;
   options?: ConfigFieldOption[];
+  uiWidth?: "compact" | "default";
 };
 
 export const noop = () => undefined;
@@ -90,6 +91,7 @@ function normalizeFieldDefinition(field: unknown): ConfigFieldDefinition | null 
     type,
     required: record.required === true,
     description: typeof record.description === "string" ? record.description : undefined,
+    uiWidth: record.uiWidth === "compact" ? "compact" : "default",
     options: Array.isArray(record.options)
       ? record.options
           .map((option) => normalizeFieldOption(option))

@@ -151,6 +151,33 @@ export const paginationArgs = {
   cursor: v.optional(v.string()),
 };
 
+export const sessionTokenValidator = v.string();
+
+export const authSignUpArgs = {
+  name: v.string(),
+  email: v.string(),
+  password: v.string(),
+  eid: v.optional(v.string()),
+  profileData: v.optional(v.any()),
+};
+
+export const authSignInArgs = {
+  email: v.string(),
+  password: v.string(),
+};
+
+export const authSignOutArgs = {
+  sessionToken: sessionTokenValidator,
+};
+
+export const authGetCurrentUserArgs = {
+  sessionToken: sessionTokenValidator,
+};
+
+const sessionTokenArg = {
+  sessionToken: sessionTokenValidator,
+};
+
 export const marketplaceTemplateFilterArgs = {
   source: templateSourceValidator,
   category: v.optional(v.string()),
@@ -160,6 +187,7 @@ export const marketplaceTemplateFilterArgs = {
 };
 
 export const agentListFilterArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   status: v.optional(agentStatusValidator),
   ownerType: v.optional(agentOwnerTypeValidator),
@@ -168,6 +196,7 @@ export const agentListFilterArgs = {
 };
 
 export const agentLogListArgs = {
+  ...sessionTokenArg,
   agentId: v.id("agents"),
   ...paginationArgs,
 };
@@ -181,6 +210,7 @@ export const userProfileCreateArgs = {
 };
 
 export const userProfileUpdateArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   ...userProfileCreateArgs,
 };
@@ -188,10 +218,12 @@ export const userProfileUpdateArgs = {
 export const userProfileUpsertArgs = userProfileUpdateArgs;
 
 export const userProfileGetArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
 };
 
 export const agentCreateArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   type: agentTypeValidator,
   config: configEnvelopeValidator,
@@ -201,20 +233,24 @@ export const agentCreateArgs = {
 };
 
 export const agentUpdateStatusArgs = {
+  ...sessionTokenArg,
   agentId: v.id("agents"),
   status: agentStatusValidator,
 };
 
 export const agentRunNowArgs = {
+  ...sessionTokenArg,
   agentId: v.id("agents"),
 };
 
 export const agentUpdateScheduleArgs = {
+  ...sessionTokenArg,
   agentId: v.id("agents"),
   schedule: scheduleConfigValidator,
 };
 
 export const agentDeleteArgs = {
+  ...sessionTokenArg,
   agentId: v.id("agents"),
 };
 
@@ -223,18 +259,21 @@ export const marketplaceGetTemplateArgs = {
 };
 
 export const marketplaceInstallTemplateArgs = {
+  ...sessionTokenArg,
   templateId: v.id("marketplaceTemplates"),
   userId: v.id("users"),
   config: configEnvelopeValidator,
 };
 
 export const marketplaceSubmitTemplateArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   draftPayload: templateDraftPayloadValidator,
   templateId: v.optional(v.id("marketplaceTemplates")),
 };
 
 export const marketplaceReviewSubmissionArgs = {
+  ...sessionTokenArg,
   submissionId: v.id("templateSubmissions"),
   decision: reviewDecisionValidator,
   reviewerId: v.id("users"),
@@ -276,6 +315,7 @@ export const registrationMonitorListArgs = {
 };
 
 export const pendingActionCreateArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   agentId: v.id("agents"),
   type: pendingActionTypeValidator,
@@ -283,16 +323,19 @@ export const pendingActionCreateArgs = {
 };
 
 export const pendingActionResolveArgs = {
+  ...sessionTokenArg,
   actionId: v.id("pendingActions"),
   response: v.any(),
 };
 
 export const pendingActionListArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   ...paginationArgs,
 };
 
 export const customWorkflowCreateArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   prompt: v.string(),
   sourceAlias: v.optional(workflowSourceAliasValidator),
@@ -303,11 +346,13 @@ export const customWorkflowCreateArgs = {
 };
 
 export const customWorkflowListArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   ...paginationArgs,
 };
 
 export const customWorkflowUpdateArgs = {
+  ...sessionTokenArg,
   workflowId: v.id("customWorkflows"),
   patch: v.optional(v.any()),
   spec: v.optional(v.any()),
@@ -318,6 +363,7 @@ export const customWorkflowUpdateArgs = {
 };
 
 export const agentLogAppendArgs = {
+  ...sessionTokenArg,
   agentId: v.id("agents"),
   event: v.string(),
   level: v.optional(logLevelValidator),
@@ -327,6 +373,7 @@ export const agentLogAppendArgs = {
 };
 
 export const agentLogListByUserArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
   ...paginationArgs,
 };
@@ -343,6 +390,7 @@ export const runtimeWebhookPayloadValidator = v.object({
 });
 
 export const dashboardGetOverviewArgs = {
+  ...sessionTokenArg,
   userId: v.id("users"),
 };
 
